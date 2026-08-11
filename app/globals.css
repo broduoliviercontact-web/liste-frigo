@@ -103,7 +103,8 @@ h1 { margin: 0; font-size: clamp(31px, 7vw, 42px); line-height: .95; letter-spac
 .write-screen h2 { margin: 4px 0 0; font-size: 30px; line-height: 1; }
 .write-screen header button { width: 44px; height: 44px; border: 2px solid #111; background: transparent; font-size: 32px; line-height: 1; }
 .writing-zone { position: relative; flex: 1; margin: 20px 0; border: 3px solid #111; background: #fff; overflow: hidden; }
-.writing-zone > span { position: absolute; inset: 0; display: grid; place-items: center; color: #ddd; font-size: 72px; font-style: italic; }
+.writing-zone > span { position: absolute; inset: 0; display: grid; place-items: center; color: #bbb; font-size: 34px; font-weight: 700; pointer-events: none; }
+.writing-zone canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
 .stroke { position: absolute; display: block; border: solid #111; border-width: 0 0 6px 0; border-radius: 50%; transform: rotate(-8deg); }
 .stroke-one { width: 37%; height: 22%; left: 14%; top: 43%; }
 .stroke-two { width: 28%; height: 30%; left: 39%; top: 35%; transform: rotate(14deg); }
@@ -111,6 +112,8 @@ h1 { margin: 0; font-size: clamp(31px, 7vw, 42px); line-height: .95; letter-spac
 .detected-word { border: 3px solid #111; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; }
 .detected-word span { font-size: 12px; font-weight: 800; text-transform: uppercase; }
 .detected-word strong { font-size: 28px; }
+.detected-word input { width: 58%; border: 0; border-bottom: 2px solid #111; background: transparent; font-size: 25px; font-weight: 800; text-align: right; outline: 0; }
+.write-actions button:disabled { opacity: .3; }
 .write-actions button { min-height: 56px; }
 
 .prototype-note { margin: 0; text-align: center; font-family: monospace; font-size: 12px; color: #444; }

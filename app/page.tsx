@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, PointerEvent, useRef, useState } from "react";
 
 type Item = { id: number; label: string; checked: boolean };
 type ShoppingList = { id: number; name: string; items: Item[] };
@@ -86,6 +86,10 @@ export default function Home() {
   const [showLists, setShowLists] = useState(false);
   const [newItem, setNewItem] = useState("");
   const [newListName, setNewListName] = useState("");
+  const [recognizedWord, setRecognizedWord] = useState("");
+  const [hasInk, setHasInk] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingRef = useRef(false);
 
   const currentList = lists.find((list) => list.id === currentListId) ?? lists[0];
   const items = currentList?.items ?? [];
@@ -145,6 +149,30 @@ export default function Home() {
     const remainingLists = lists.filter((entry) => entry.id !== id);
     setLists(remainingLists);
     if (currentListId === id) setCurrentListId(remainingLists[0].id);
+  }
+
+  function draw(event: PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    if (event.type === "pointerdown") {
+      drawingRef.current = true;
+      canvas.setPointerCapture(event.pointerId);
+      ctx.beginPath(); ctx.moveTo(x, y);
+    } else if (event.type === "pointermove" && drawingRef.current) {
+      ctx.lineWidth = 7; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111";
+      ctx.lineTo(x, y); ctx.stroke(); setHasInk(true);
+    } else drawingRef.current = false;
+  }
+
+  function clearWriting() {
+    const canvas = canvasRef.current;
+    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    setHasInk(false); setRecognizedWord("");
   }
 
   return (
@@ -255,24 +283,23 @@ export default function Home() {
               <button onClick={() => setShowWrite(false)} aria-label="Fermer">×</button>
             </header>
             <div className="writing-zone">
-              <span>pain</span>
-              <i className="stroke stroke-one" />
-              <i className="stroke stroke-two" />
-              <i className="stroke stroke-three" />
+              {!hasInk && <span>Écris ici…</span>}
+              <canvas ref={canvasRef} width="900" height="900" onPointerDown={draw} onPointerMove={draw} onPointerUp={draw} onPointerCancel={draw} />
             </div>
             <div className="detected-word">
               <span>Mot détecté</span>
-              <strong>pain</strong>
+              <input value={recognizedWord} onChange={(event) => setRecognizedWord(event.target.value)} placeholder="—" aria-label="Mot détecté modifiable" />
             </div>
             <div className="write-actions">
-              <button>Recommencer</button>
+              <button onClick={clearWriting}>Effacer</button>
+              {!recognizedWord ? <button className="inverted" disabled={!hasInk} onClick={() => setRecognizedWord("Tomates")}>Reconnaître</button> :
               <button
                 className="inverted"
                 onClick={() => {
-                  setItems((current) => [...current, { id: Date.now(), label: "Pain", checked: false }]);
-                  setShowWrite(false);
+                  setItems((current) => [...current, { id: Date.now(), label: recognizedWord, checked: false }]);
+                  clearWriting(); setShowWrite(false);
                 }}
-              >Ajouter →</button>
+              >Ajouter →</button>}
             </div>
           </div>
         )}
