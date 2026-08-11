@@ -51,8 +51,8 @@ h1 { margin: 0; font-size: clamp(31px, 7vw, 42px); line-height: .95; letter-spac
 .summary strong { font-size: 34px; line-height: 1; }
 .summary span { font-size: 14px; font-weight: 700; }
 
-.shopping-list { list-style: none; padding: 0 26px; margin: 0; overflow-y: auto; flex: 1; }
-.shopping-list li { border-bottom: 2px solid #111; }
+.shopping-list { list-style: none; padding: 0 26px; margin: 0; overflow-y: auto; flex: 1; scroll-snap-type: y proximity; overscroll-behavior: contain; }
+.shopping-list li { border-bottom: 2px solid #111; scroll-snap-align: start; scroll-snap-stop: normal; }
 .item-button { width: 100%; min-height: 72px; border: 0; background: transparent; display: flex; align-items: center; gap: 18px; padding: 8px 2px; text-align: left; cursor: pointer; }
 .checkbox { width: 34px; height: 34px; border: 3px solid #111; display: grid; place-items: center; flex: 0 0 auto; font-size: 24px; font-weight: 900; line-height: 1; }
 .item-emoji { width: 38px; flex: 0 0 38px; text-align: center; font-size: 30px; line-height: 1; filter: grayscale(1) contrast(1.15); }
