@@ -12,6 +12,54 @@ const initialItems: Item[] = [
   { id: 5, label: "Dentifrice", checked: false },
 ];
 
+const groceryEmojis: Array<[string[], string]> = [
+  [["pain", "baguette", "brioche", "croissant"], "🍞"],
+  [["lait"], "🥛"],
+  [["cafe", "café"], "☕"],
+  [["pomme", "pommes"], "🍎"],
+  [["banane", "bananes"], "🍌"],
+  [["orange", "oranges"], "🍊"],
+  [["citron", "citrons"], "🍋"],
+  [["fraise", "fraises"], "🍓"],
+  [["raisin", "raisins"], "🍇"],
+  [["tomate", "tomates"], "🍅"],
+  [["carotte", "carottes"], "🥕"],
+  [["patate", "patates", "pomme de terre"], "🥔"],
+  [["salade", "laitue"], "🥬"],
+  [["oignon", "oignons"], "🧅"],
+  [["ail"], "🧄"],
+  [["avocat", "avocats"], "🥑"],
+  [["champignon", "champignons"], "🍄"],
+  [["oeuf", "oeufs", "œuf", "œufs"], "🥚"],
+  [["fromage"], "🧀"],
+  [["beurre"], "🧈"],
+  [["yaourt", "yogourt"], "🥣"],
+  [["poulet"], "🍗"],
+  [["viande", "steak"], "🥩"],
+  [["poisson", "saumon", "thon"], "🐟"],
+  [["riz"], "🍚"],
+  [["pates", "pâtes"], "🍝"],
+  [["pizza"], "🍕"],
+  [["chocolat"], "🍫"],
+  [["miel"], "🍯"],
+  [["eau"], "💧"],
+  [["jus"], "🧃"],
+  [["biere", "bière"], "🍺"],
+  [["vin"], "🍷"],
+  [["savon"], "🧼"],
+  [["dentifrice"], "🪥"],
+  [["papier toilette", "sopalin", "essuie-tout"], "🧻"],
+  [["lessive"], "🧺"],
+  [["éponge", "eponge"], "🧽"],
+];
+
+function emojiFor(label: string) {
+  const normalized = label.toLocaleLowerCase("fr").trim();
+  return groceryEmojis.find(([words]) =>
+    words.some((word) => normalized.includes(word)),
+  )?.[1] ?? "🛒";
+}
+
 export default function Home() {
   const [items, setItems] = useState(initialItems);
   const [showAdd, setShowAdd] = useState(false);
@@ -74,6 +122,7 @@ export default function Home() {
                 <span className="checkbox" aria-hidden="true">
                   {item.checked ? "✓" : ""}
                 </span>
+                <span className="item-emoji" aria-hidden="true">{emojiFor(item.label)}</span>
                 <span className="item-label">{item.label}</span>
               </button>
             </li>
