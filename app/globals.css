@@ -70,6 +70,10 @@ h1 { margin: 0; font-size: clamp(31px, 7vw, 42px); line-height: .95; letter-spac
 .secondary-actions button { font-size: 12px; }
 .sync-line { margin: 13px 0 0; font-size: 11px; font-weight: 700; text-align: center; text-transform: uppercase; letter-spacing: .08em; }
 .sync-line span { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #111; margin-right: 5px; }
+.sync-line.loading span { animation: sync-pulse 1s steps(2) infinite; }
+.sync-line.error { color: #555; }
+.sync-line.error span { background: transparent; border: 2px solid #111; }
+@keyframes sync-pulse { 50% { opacity: .25; } }
 
 .overlay, .write-screen { position: absolute; inset: 0; z-index: 5; background: rgb(248 247 241 / 96%); }
 .list-manager { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; padding: 25px; background: #f8f7f1; }

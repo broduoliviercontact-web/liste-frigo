@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, PointerEvent, useRef, useState } from "react";
+import { FormEvent, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type Item = { id: number; label: string; checked: boolean };
 type ShoppingList = { id: number; name: string; items: Item[] };
@@ -90,65 +90,80 @@ export default function Home() {
   const [hasInk, setHasInk] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
+  const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
+
+  const loadLists = useCallback(async (quiet = false) => {
+    if (!quiet) setSyncState("loading");
+    try {
+      const response = await fetch("/api/lists", { cache: "no-store" });
+      if (!response.ok) throw new Error("sync");
+      const data = await response.json() as { lists: ShoppingList[] };
+      setLists(data.lists);
+      setCurrentListId((current) => data.lists.some((list) => list.id === current) ? current : data.lists[0]?.id ?? 0);
+      setSyncState("synced");
+    } catch { setSyncState("error"); }
+  }, []);
+
+  useEffect(() => {
+    const initialTimer = window.setTimeout(() => loadLists(), 0);
+    const timer = window.setInterval(() => loadLists(true), 5000);
+    return () => { window.clearTimeout(initialTimer); window.clearInterval(timer); };
+  }, [loadLists]);
+
+  async function mutate(action: Record<string, unknown>) {
+    setSyncState("loading");
+    try {
+      const response = await fetch("/api/lists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(action) });
+      if (!response.ok) throw new Error("sync");
+      const data = await response.json() as { lists: ShoppingList[] };
+      setLists(data.lists); setSyncState("synced"); return data.lists;
+    } catch { setSyncState("error"); return null; }
+  }
 
   const currentList = lists.find((list) => list.id === currentListId) ?? lists[0];
   const items = currentList?.items ?? [];
   const remaining = items.filter((item) => !item.checked).length;
 
-  function setItems(update: (items: Item[]) => Item[]) {
-    setLists((current) => current.map((list) =>
-      list.id === currentListId ? { ...list, items: update(list.items) } : list,
-    ));
+  async function toggle(id: number) {
+    const item = items.find((entry) => entry.id === id);
+    if (item) await mutate({ action: "toggleItem", id, checked: !item.checked });
   }
 
-  function toggle(id: number) {
-    setItems((current) =>
-      current.map((item) =>
-        item.id === id ? { ...item, checked: !item.checked } : item,
-      ),
-    );
-  }
-
-  function addItem(event: FormEvent) {
+  async function addItem(event: FormEvent) {
     event.preventDefault();
     const label = newItem.trim();
     if (!label) return;
-    setItems((current) => [
-      ...current,
-      { id: Date.now(), label, checked: false },
-    ]);
+    await mutate({ action: "addItem", listId: currentListId, label });
     setNewItem("");
     setShowAdd(false);
   }
 
-  function clearChecked() {
-    setItems((current) => current.filter((item) => !item.checked));
+  async function clearChecked() {
+    await mutate({ action: "clearChecked", listId: currentListId });
   }
 
-  function createList(event: FormEvent) {
+  async function createList(event: FormEvent) {
     event.preventDefault();
     const name = newListName.trim();
     if (!name) return;
-    const id = Date.now();
-    setLists((current) => [...current, { id, name, items: [] }]);
-    setCurrentListId(id);
+    const updated = await mutate({ action: "createList", name });
+    if (updated?.length) setCurrentListId(updated[updated.length - 1].id);
     setNewListName("");
     setShowLists(false);
   }
 
-  function renameList(id: number) {
+  async function renameList(id: number) {
     const list = lists.find((entry) => entry.id === id);
     const name = window.prompt("Nouveau nom de la liste :", list?.name)?.trim();
-    if (name) setLists((current) => current.map((entry) => entry.id === id ? { ...entry, name } : entry));
+    if (name) await mutate({ action: "renameList", id, name });
   }
 
-  function deleteList(id: number) {
+  async function deleteList(id: number) {
     if (lists.length === 1) return;
     const list = lists.find((entry) => entry.id === id);
     if (!window.confirm(`Supprimer la liste « ${list?.name} » ?`)) return;
-    const remainingLists = lists.filter((entry) => entry.id !== id);
-    setLists(remainingLists);
-    if (currentListId === id) setCurrentListId(remainingLists[0].id);
+    const updated = await mutate({ action: "deleteList", id });
+    if (currentListId === id && updated?.length) setCurrentListId(updated[0].id);
   }
 
   function draw(event: PointerEvent<HTMLCanvasElement>) {
@@ -223,14 +238,14 @@ export default function Home() {
             <button onClick={() => setShowAdd(true)}>+ Clavier</button>
             <button onClick={clearChecked}>Effacer cochés</button>
           </div>
-          <p className="sync-line"><span /> Synchronisé à l'instant</p>
+          <p className={`sync-line ${syncState}`}><span /> {syncState === "loading" ? "Synchronisation…" : syncState === "error" ? "Hors connexion — réessayer" : "Synchronisé"}</p>
         </footer>
 
         {showAdd && (
           <div className="overlay" role="dialog" aria-modal="true" aria-label="Ajouter un article">
             <form className="panel" onSubmit={addItem}>
               <p className="eyebrow">NOUVEL ARTICLE</p>
-              <label htmlFor="new-item">Qu'est-ce qu'il faut acheter&nbsp;?</label>
+              <label htmlFor="new-item">Qu&apos;est-ce qu&apos;il faut acheter&nbsp;?</label>
               <input
                 id="new-item"
                 value={newItem}
@@ -295,8 +310,8 @@ export default function Home() {
               {!recognizedWord ? <button className="inverted" disabled={!hasInk} onClick={() => setRecognizedWord("Tomates")}>Reconnaître</button> :
               <button
                 className="inverted"
-                onClick={() => {
-                  setItems((current) => [...current, { id: Date.now(), label: recognizedWord, checked: false }]);
+                onClick={async () => {
+                  await mutate({ action: "addItem", listId: currentListId, label: recognizedWord });
                   clearWriting(); setShowWrite(false);
                 }}
               >Ajouter →</button>}
