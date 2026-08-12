@@ -57,6 +57,9 @@ const groceryEmojis: Array<[string[], string]> = [
   [["poisson", "saumon", "thon"], "🐟"],
   [["riz"], "🍚"],
   [["pates", "pâtes"], "🍝"],
+  [["sucre", "cassonade"], "🍬"],
+  [["sel", "poivre", "épice", "epice", "épices", "epices"], "🧂"],
+  [["farine"], "🌾"],
   [["pizza"], "🍕"],
   [["chocolat"], "🍫"],
   [["miel"], "🍯"],
@@ -67,6 +70,7 @@ const groceryEmojis: Array<[string[], string]> = [
   [["savon"], "🧼"],
   [["dentifrice"], "🪥"],
   [["papier toilette", "sopalin", "essuie-tout"], "🧻"],
+  [["couche", "couches", "lingette", "lingettes"], "👶"],
   [["lessive"], "🧺"],
   [["éponge", "eponge"], "🧽"],
 ];
