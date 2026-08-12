@@ -82,26 +82,39 @@ function emojiFor(label: string) {
   )?.[1] ?? "🛒";
 }
 
+type WeatherMode = "canicule" | "doux" | "pluie" | "froid";
+
+const weatherScenarios: Record<WeatherMode, {
+  label: string; icon: string; now: string; morning: string; evening: string;
+  rain: string; image: string; clothes: string[]; feeling: string; advice: string;
+}> = {
+  canicule: { label: "Canicule", icon: "☀", now: "20°", morning: "20,3°C", evening: "34,7°C", rain: "0% pluie", image: "/avatars/cesar-canicule-epaper.png", clothes: ["Body manches courtes", "T-shirt léger", "Short léger"], feeling: "Très chaud", advice: "Chapeau + crème solaire" },
+  doux: { label: "Doux", icon: "☁", now: "14°", morning: "13,8°C", evening: "19,2°C", rain: "10% pluie", image: "/avatars/cesar-doux-epaper.png", clothes: ["T-shirt", "Petit gilet", "Pantalon léger"], feeling: "Temps doux", advice: "Gilet facile à retirer" },
+  pluie: { label: "Pluie", icon: "☂", now: "13°", morning: "12,6°C", evening: "15,4°C", rain: "80% pluie", image: "/avatars/cesar-pluie-epaper.png", clothes: ["Ciré imperméable", "Pantalon", "Bottes de pluie"], feeling: "Pluvieux", advice: "Parapluie + tenue de rechange" },
+  froid: { label: "Froid", icon: "❄", now: "3°", morning: "2,4°C", evening: "6,8°C", rain: "10% pluie", image: "/avatars/cesar-froid-epaper.png", clothes: ["Manteau chaud", "Bonnet + écharpe", "Pantalon + bottines"], feeling: "Très froid", advice: "Bien couvrir les extrémités" },
+};
+
 function CrechePage({ onLists }: { onLists: () => void }) {
+  const [mode, setMode] = useState<WeatherMode>("canicule");
+  const weather = weatherScenarios[mode];
   return <div className="creche-page">
     <header className="creche-header">
       <div><p className="eyebrow">MÉTÉO CRÈCHE</p><h1>Pantin</h1></div>
-      <div className="weather-now"><strong>20°</strong><span>☀</span><small>12 AOÛT</small></div>
+      <div className="weather-now"><strong>{weather.now}</strong><span>{weather.icon}</span><small>12 AOÛT</small></div>
     </header>
+    <div className="weather-demo" aria-label="Tester une tenue météo">
+      {(Object.keys(weatherScenarios) as WeatherMode[]).map((key) => <button key={key} className={mode === key ? "active" : ""} onClick={() => setMode(key)}>{weatherScenarios[key].label}</button>)}
+    </div>
     <section className="morning-card">
-      <div className="period-title"><div><p className="eyebrow">DÉPART · 8H</p><strong>20,3°C</strong></div><span>0% pluie</span></div>
+      <div className="period-title"><div><p className="eyebrow">DÉPART · 8H</p><strong>{weather.morning}</strong></div><span>{weather.rain}</span></div>
       <div className="avatar-and-clothes">
-        <div className="baby-avatar" aria-label="Avatar portant un t-shirt, un short et un chapeau">
-          <div className="sun-hat" /><div className="baby-head"><i /><b /></div>
-          <div className="tshirt"><i /><b /></div><div className="shorts"><i /><b /></div>
-          <div className="baby-legs"><i /><b /></div>
-        </div>
-        <ul><li>Body manches courtes</li><li>T-shirt léger</li><li>Short léger</li></ul>
+        <div className="baby-avatar"><img src={weather.image} alt={`César habillé pour un temps ${weather.label.toLowerCase()}, avec son doudou girafe`} /></div>
+        <ul>{weather.clothes.map((item) => <li key={item}>{item}</li>)}</ul>
       </div>
     </section>
     <section className="evening-card">
-      <div><p className="eyebrow">RETOUR · 17H</p><strong>34,7°C</strong></div>
-      <div className="sun-advice"><span>☀</span><p><strong>Très chaud</strong><br />Chapeau + crème solaire</p></div>
+      <div><p className="eyebrow">RETOUR · 17H</p><strong>{weather.evening}</strong></div>
+      <div className="sun-advice"><span>{weather.icon}</span><p><strong>{weather.feeling}</strong><br />{weather.advice}</p></div>
     </section>
     <p className="weather-update"><span /> Brief du 12 août · démonstration</p>
     <nav className="app-nav" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button></nav>
