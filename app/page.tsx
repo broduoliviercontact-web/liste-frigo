@@ -94,7 +94,7 @@ const weatherScenarios: Record<WeatherMode, {
   froid: { label: "Froid", icon: "❄", now: "3°", morning: "2,4°C", evening: "6,8°C", rain: "10% pluie", image: "/avatars/cesar-froid-epaper.png", clothes: ["Manteau chaud", "Bonnet + écharpe", "Pantalon + bottines"], feeling: "Très froid", advice: "Bien couvrir les extrémités" },
 };
 
-function CrechePage({ onLists }: { onLists: () => void }) {
+function CrechePage({ onLists, onWardrobe }: { onLists: () => void; onWardrobe: () => void }) {
   const [mode, setMode] = useState<WeatherMode>("canicule");
   const weather = weatherScenarios[mode];
   return <div className="creche-page">
@@ -117,7 +117,47 @@ function CrechePage({ onLists }: { onLists: () => void }) {
       <div className="sun-advice"><span>{weather.icon}</span><p><strong>{weather.feeling}</strong><br />{weather.advice}</p></div>
     </section>
     <p className="weather-update"><span /> Brief du 12 août · démonstration</p>
-    <nav className="app-nav" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button></nav>
+    <nav className="app-nav three" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button><button onClick={onWardrobe}>▣ <span>Tenues</span></button></nav>
+  </div>;
+}
+
+type LayerSettings = { x: number; y: number; scale: number };
+
+function WardrobePage({ onLists, onCreche }: { onLists: () => void; onCreche: () => void }) {
+  const [settings, setSettings] = useState<LayerSettings>({ x: 0, y: 7, scale: 58 });
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("cesar-body-cotele-settings");
+    if (saved) {
+      try { setSettings(JSON.parse(saved) as LayerSettings); } catch { /* garder le réglage par défaut */ }
+    }
+  }, []);
+
+  function update(patch: Partial<LayerSettings>) {
+    setSettings((current) => {
+      const next = { ...current, ...patch };
+      window.localStorage.setItem("cesar-body-cotele-settings", JSON.stringify(next));
+      return next;
+    });
+  }
+
+  return <div className="wardrobe-page">
+    <header className="wardrobe-header"><div><p className="eyebrow">GARDE-ROBE</p><h1>Habiller César</h1></div><span>1 VÊTEMENT</span></header>
+    <section className="wardrobe-workspace" aria-label="Aperçu des calques">
+      <div className="wardrobe-canvas">
+        <img className="avatar-base" src="/wardrobe/base/cesar-base-epaper.png" alt="César dans la pose de base" />
+        <img className="clothing-layer" src="/wardrobe/tops/body-cotele-clair-layer.png" alt="Calque du body côtelé clair" style={{ transform: `translate(${settings.x}%, ${settings.y}%) scale(${settings.scale / 100})` }} />
+      </div>
+      <div className="layer-card"><span className="layer-eye">●</span><div><strong>Body côtelé clair</strong><small>HAUT · CALQUE 01</small></div><b>✓</b></div>
+    </section>
+    <section className="calibration-panel">
+      <div className="calibration-title"><div><p className="eyebrow">CALIBRAGE</p><strong>Ajuster le body</strong></div><button onClick={() => update({ x: 0, y: 7, scale: 58 })}>Réinitialiser</button></div>
+      <div className="adjust-row"><span>↔ Position</span><button aria-label="Déplacer à gauche" onClick={() => update({ x: settings.x - 1 })}>←</button><output>{settings.x}</output><button aria-label="Déplacer à droite" onClick={() => update({ x: settings.x + 1 })}>→</button></div>
+      <div className="adjust-row"><span>↕ Hauteur</span><button aria-label="Déplacer vers le haut" onClick={() => update({ y: settings.y - 1 })}>↑</button><output>{settings.y}</output><button aria-label="Déplacer vers le bas" onClick={() => update({ y: settings.y + 1 })}>↓</button></div>
+      <div className="adjust-row"><span>⤢ Taille</span><button aria-label="Réduire le vêtement" onClick={() => update({ scale: Math.max(40, settings.scale - 1) })}>−</button><output>{settings.scale}%</output><button aria-label="Agrandir le vêtement" onClick={() => update({ scale: Math.min(90, settings.scale + 1) })}>+</button></div>
+      <p className="saved-setting">● Réglage sauvegardé sur cet appareil</p>
+    </section>
+    <nav className="app-nav three" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button className="active">▣ <span>Tenues</span></button></nav>
   </div>;
 }
 
@@ -134,7 +174,7 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
-  const [view, setView] = useState<"lists" | "creche">("lists");
+  const [view, setView] = useState<"lists" | "creche" | "wardrobe">("lists");
 
   const loadLists = useCallback(async (quiet = false) => {
     if (!quiet) setSyncState("loading");
@@ -237,7 +277,7 @@ export default function Home() {
   return (
     <main className="stage">
       <section className="device" aria-label="Aperçu de l'écran Liste Frigo">
-        {view === "creche" ? <CrechePage onLists={() => setView("lists")} /> : <>
+        {view === "creche" ? <CrechePage onLists={() => setView("lists")} onWardrobe={() => setView("wardrobe")} /> : view === "wardrobe" ? <WardrobePage onLists={() => setView("lists")} onCreche={() => setView("creche")} /> : <>
         <header className="topbar">
           <div>
             <p className="eyebrow">LISTE PARTAGÉE</p>
@@ -284,7 +324,7 @@ export default function Home() {
             <button onClick={clearChecked}>Effacer cochés</button>
           </div>
           <p className={`sync-line ${syncState}`}><span /> {syncState === "loading" ? "Synchronisation…" : syncState === "error" ? "Hors connexion — réessayer" : "Synchronisé"}</p>
-          <nav className="app-nav" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button></nav>
+          <nav className="app-nav three" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button><button onClick={() => setView("wardrobe")}>▣ <span>Tenues</span></button></nav>
         </footer>
 
         {showAdd && (
