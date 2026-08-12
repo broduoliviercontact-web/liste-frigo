@@ -122,39 +122,58 @@ function CrechePage({ onLists, onWardrobe }: { onLists: () => void; onWardrobe: 
 }
 
 type LayerSettings = { x: number; y: number; scale: number };
+type WardrobeLayerId = "body" | "pants";
+
+const defaultLayerSettings: Record<WardrobeLayerId, LayerSettings> = {
+  body: { x: 0, y: 7, scale: 58 },
+  pants: { x: 0, y: 23, scale: 58 },
+};
 
 function WardrobePage({ onLists, onCreche }: { onLists: () => void; onCreche: () => void }) {
-  const [settings, setSettings] = useState<LayerSettings>({ x: 0, y: 7, scale: 58 });
+  const [settings, setSettings] = useState(defaultLayerSettings);
+  const [selected, setSelected] = useState<WardrobeLayerId>("body");
+  const [visible, setVisible] = useState<Record<WardrobeLayerId, boolean>>({ body: true, pants: true });
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("cesar-body-cotele-settings");
-    if (saved) {
-      try { setSettings(JSON.parse(saved) as LayerSettings); } catch { /* garder le réglage par défaut */ }
+    const body = window.localStorage.getItem("cesar-body-cotele-settings");
+    const pants = window.localStorage.getItem("cesar-pantalon-oursons-settings");
+    try {
+      setSettings({ body: body ? JSON.parse(body) as LayerSettings : defaultLayerSettings.body, pants: pants ? JSON.parse(pants) as LayerSettings : defaultLayerSettings.pants });
+    } catch {
+      setSettings(defaultLayerSettings);
     }
   }, []);
 
   function update(patch: Partial<LayerSettings>) {
     setSettings((current) => {
-      const next = { ...current, ...patch };
-      window.localStorage.setItem("cesar-body-cotele-settings", JSON.stringify(next));
+      const layer = { ...current[selected], ...patch };
+      const next = { ...current, [selected]: layer };
+      window.localStorage.setItem(selected === "body" ? "cesar-body-cotele-settings" : "cesar-pantalon-oursons-settings", JSON.stringify(layer));
       return next;
     });
   }
 
+  const active = settings[selected];
+  const selectedName = selected === "body" ? "le body" : "le pantalon";
+
   return <div className="wardrobe-page">
-    <header className="wardrobe-header"><div><p className="eyebrow">GARDE-ROBE</p><h1>Habiller César</h1></div><span>1 VÊTEMENT</span></header>
+    <header className="wardrobe-header"><div><p className="eyebrow">GARDE-ROBE</p><h1>Habiller César</h1></div><span>2 VÊTEMENTS</span></header>
     <section className="wardrobe-workspace" aria-label="Aperçu des calques">
       <div className="wardrobe-canvas">
         <img className="avatar-base" src="/wardrobe/base/cesar-base-epaper.png" alt="César dans la pose de base" />
-        <img className="clothing-layer" src="/wardrobe/tops/body-cotele-clair-layer.png" alt="Calque du body côtelé clair" style={{ transform: `translate(${settings.x}%, ${settings.y}%) scale(${settings.scale / 100})` }} />
+        {visible.body && <img className="clothing-layer" src="/wardrobe/tops/body-cotele-clair-layer.png" alt="Calque du body côtelé clair" style={{ transform: `translate(${settings.body.x}%, ${settings.body.y}%) scale(${settings.body.scale / 100})` }} />}
+        {visible.pants && <img className="clothing-layer pants-layer" src="/wardrobe/bottoms/pantalon-oursons-layer.png" alt="Calque du pantalon à oursons" style={{ transform: `translate(${settings.pants.x}%, ${settings.pants.y}%) scale(${settings.pants.scale / 100})` }} />}
       </div>
-      <div className="layer-card"><span className="layer-eye">●</span><div><strong>Body côtelé clair</strong><small>HAUT · CALQUE 01</small></div><b>✓</b></div>
+      <div className="layer-list">
+        <div className={`layer-card ${selected === "body" ? "selected" : ""}`}><button className="select-layer" onClick={() => setSelected("body")}><span className="layer-eye">●</span><span><strong>Body côtelé clair</strong><small>HAUT · CALQUE 01</small></span></button><button className="toggle-layer" aria-label={`${visible.body ? "Masquer" : "Afficher"} le body côtelé`} onClick={() => setVisible((current) => ({ ...current, body: !current.body }))}>{visible.body ? "✓" : ""}</button></div>
+        <div className={`layer-card ${selected === "pants" ? "selected" : ""}`}><button className="select-layer" onClick={() => setSelected("pants")}><span className="layer-eye">●</span><span><strong>Pantalon oursons</strong><small>BAS · CALQUE 02</small></span></button><button className="toggle-layer" aria-label={`${visible.pants ? "Masquer" : "Afficher"} le pantalon à oursons`} onClick={() => setVisible((current) => ({ ...current, pants: !current.pants }))}>{visible.pants ? "✓" : ""}</button></div>
+      </div>
     </section>
     <section className="calibration-panel">
-      <div className="calibration-title"><div><p className="eyebrow">CALIBRAGE</p><strong>Ajuster le body</strong></div><button onClick={() => update({ x: 0, y: 7, scale: 58 })}>Réinitialiser</button></div>
-      <div className="adjust-row"><span>↔ Position</span><button aria-label="Déplacer à gauche" onClick={() => update({ x: settings.x - 1 })}>←</button><output>{settings.x}</output><button aria-label="Déplacer à droite" onClick={() => update({ x: settings.x + 1 })}>→</button></div>
-      <div className="adjust-row"><span>↕ Hauteur</span><button aria-label="Déplacer vers le haut" onClick={() => update({ y: settings.y - 1 })}>↑</button><output>{settings.y}</output><button aria-label="Déplacer vers le bas" onClick={() => update({ y: settings.y + 1 })}>↓</button></div>
-      <div className="adjust-row"><span>⤢ Taille</span><button aria-label="Réduire le vêtement" onClick={() => update({ scale: Math.max(40, settings.scale - 1) })}>−</button><output>{settings.scale}%</output><button aria-label="Agrandir le vêtement" onClick={() => update({ scale: Math.min(90, settings.scale + 1) })}>+</button></div>
+      <div className="calibration-title"><div><p className="eyebrow">CALIBRAGE</p><strong>Ajuster {selectedName}</strong></div><button onClick={() => update(defaultLayerSettings[selected])}>Réinitialiser</button></div>
+      <div className="adjust-row"><span>↔ Position</span><button aria-label={`Déplacer ${selectedName} à gauche`} onClick={() => update({ x: active.x - 1 })}>←</button><output>{active.x}</output><button aria-label={`Déplacer ${selectedName} à droite`} onClick={() => update({ x: active.x + 1 })}>→</button></div>
+      <div className="adjust-row"><span>↕ Hauteur</span><button aria-label={`Déplacer ${selectedName} vers le haut`} onClick={() => update({ y: active.y - 1 })}>↑</button><output>{active.y}</output><button aria-label={`Déplacer ${selectedName} vers le bas`} onClick={() => update({ y: active.y + 1 })}>↓</button></div>
+      <div className="adjust-row"><span>⤢ Taille</span><button aria-label={`Réduire ${selectedName}`} onClick={() => update({ scale: Math.max(40, active.scale - 1) })}>−</button><output>{active.scale}%</output><button aria-label={`Agrandir ${selectedName}`} onClick={() => update({ scale: Math.min(90, active.scale + 1) })}>+</button></div>
       <p className="saved-setting">● Réglage sauvegardé sur cet appareil</p>
     </section>
     <nav className="app-nav three" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button className="active">▣ <span>Tenues</span></button></nav>
