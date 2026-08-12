@@ -122,25 +122,27 @@ function CrechePage({ onLists, onWardrobe }: { onLists: () => void; onWardrobe: 
 }
 
 type LayerSettings = { x: number; y: number; scale: number };
-type WardrobeLayerId = "body" | "shirt" | "pants";
+type WardrobeLayerId = "body" | "shirt" | "sweater" | "pants";
 
 const defaultLayerSettings: Record<WardrobeLayerId, LayerSettings> = {
   body: { x: 0, y: 7, scale: 58 },
   shirt: { x: 0, y: 0, scale: 100 },
+  sweater: { x: 0, y: 0, scale: 100 },
   pants: { x: 0, y: 23, scale: 58 },
 };
 
 function WardrobePage({ onLists, onCreche }: { onLists: () => void; onCreche: () => void }) {
   const [settings, setSettings] = useState(defaultLayerSettings);
   const [selected, setSelected] = useState<WardrobeLayerId>("body");
-  const [visible, setVisible] = useState<Record<WardrobeLayerId, boolean>>({ body: false, shirt: true, pants: true });
+  const [visible, setVisible] = useState<Record<WardrobeLayerId, boolean>>({ body: false, shirt: false, sweater: true, pants: true });
 
   useEffect(() => {
     const body = window.localStorage.getItem("cesar-body-cotele-settings");
     const shirt = window.localStorage.getItem("cesar-chemise-carreaux-settings");
+    const sweater = window.localStorage.getItem("cesar-pull-cotele-settings");
     const pants = window.localStorage.getItem("cesar-pantalon-oursons-settings");
     try {
-      setSettings({ body: body ? JSON.parse(body) as LayerSettings : defaultLayerSettings.body, shirt: shirt ? JSON.parse(shirt) as LayerSettings : defaultLayerSettings.shirt, pants: pants ? JSON.parse(pants) as LayerSettings : defaultLayerSettings.pants });
+      setSettings({ body: body ? JSON.parse(body) as LayerSettings : defaultLayerSettings.body, shirt: shirt ? JSON.parse(shirt) as LayerSettings : defaultLayerSettings.shirt, sweater: sweater ? JSON.parse(sweater) as LayerSettings : defaultLayerSettings.sweater, pants: pants ? JSON.parse(pants) as LayerSettings : defaultLayerSettings.pants });
     } catch {
       setSettings(defaultLayerSettings);
     }
@@ -150,28 +152,38 @@ function WardrobePage({ onLists, onCreche }: { onLists: () => void; onCreche: ()
     setSettings((current) => {
       const layer = { ...current[selected], ...patch };
       const next = { ...current, [selected]: layer };
-      const key = selected === "body" ? "cesar-body-cotele-settings" : selected === "shirt" ? "cesar-chemise-carreaux-settings" : "cesar-pantalon-oursons-settings";
+      const key = selected === "body" ? "cesar-body-cotele-settings" : selected === "shirt" ? "cesar-chemise-carreaux-settings" : selected === "sweater" ? "cesar-pull-cotele-settings" : "cesar-pantalon-oursons-settings";
       window.localStorage.setItem(key, JSON.stringify(layer));
       return next;
     });
   }
 
   const active = settings[selected];
-  const selectedName = selected === "body" ? "le body" : selected === "shirt" ? "la chemise" : "le pantalon";
+  const selectedName = selected === "body" ? "le body" : selected === "shirt" ? "la chemise" : selected === "sweater" ? "le pull" : "le pantalon";
+
+  function toggleLayer(layer: WardrobeLayerId) {
+    setVisible((current) => {
+      if (layer === "pants") return { ...current, pants: !current.pants };
+      const shouldShow = !current[layer];
+      return { ...current, body: layer === "body" && shouldShow, shirt: layer === "shirt" && shouldShow, sweater: layer === "sweater" && shouldShow };
+    });
+  }
 
   return <div className="wardrobe-page">
-    <header className="wardrobe-header"><div><p className="eyebrow">GARDE-ROBE</p><h1>Habiller César</h1></div><span>3 VÊTEMENTS</span></header>
+    <header className="wardrobe-header"><div><p className="eyebrow">GARDE-ROBE</p><h1>Habiller César</h1></div><span>4 VÊTEMENTS</span></header>
     <section className="wardrobe-workspace" aria-label="Aperçu des calques">
       <div className="wardrobe-canvas">
         <img className="avatar-base" src="/wardrobe/base/cesar-base-epaper.png" alt="César dans la pose de base" />
         {visible.body && <img className="clothing-layer" src="/wardrobe/tops/body-cotele-clair-layer.png" alt="Calque du body côtelé clair" style={{ transform: `translate(${settings.body.x}%, ${settings.body.y}%) scale(${settings.body.scale / 100})` }} />}
         {visible.shirt && <img className="clothing-layer" src="/wardrobe/tops/chemise-carreaux-layer.png" alt="Calque de la chemise à carreaux" style={{ transform: `translate(${settings.shirt.x}%, ${settings.shirt.y}%) scale(${settings.shirt.scale / 100})` }} />}
+        {visible.sweater && <img className="clothing-layer" src="/wardrobe/tops/pull-cotele-clair-layer.png" alt="Calque du pull côtelé clair" style={{ transform: `translate(${settings.sweater.x}%, ${settings.sweater.y}%) scale(${settings.sweater.scale / 100})` }} />}
         {visible.pants && <img className="clothing-layer pants-layer" src="/wardrobe/bottoms/pantalon-oursons-layer.png" alt="Calque du pantalon à oursons" style={{ transform: `translate(${settings.pants.x}%, ${settings.pants.y}%) scale(${settings.pants.scale / 100})` }} />}
       </div>
       <div className="layer-list">
-        <div className={`layer-card ${selected === "body" ? "selected" : ""}`}><button className="select-layer" onClick={() => setSelected("body")}><span className="layer-eye">●</span><span><strong>Body côtelé clair</strong><small>HAUT · CALQUE 01</small></span></button><button className="toggle-layer" aria-label={`${visible.body ? "Masquer" : "Afficher"} le body côtelé`} onClick={() => setVisible((current) => ({ ...current, body: !current.body }))}>{visible.body ? "✓" : ""}</button></div>
-        <div className={`layer-card ${selected === "shirt" ? "selected" : ""}`}><button className="select-layer" onClick={() => setSelected("shirt")}><span className="layer-eye">●</span><span><strong>Chemise carreaux</strong><small>HAUT · CALQUE 02</small></span></button><button className="toggle-layer" aria-label={`${visible.shirt ? "Masquer" : "Afficher"} la chemise à carreaux`} onClick={() => setVisible((current) => ({ ...current, shirt: !current.shirt }))}>{visible.shirt ? "✓" : ""}</button></div>
-        <div className={`layer-card ${selected === "pants" ? "selected" : ""}`}><button className="select-layer" onClick={() => setSelected("pants")}><span className="layer-eye">●</span><span><strong>Pantalon oursons</strong><small>BAS · CALQUE 02</small></span></button><button className="toggle-layer" aria-label={`${visible.pants ? "Masquer" : "Afficher"} le pantalon à oursons`} onClick={() => setVisible((current) => ({ ...current, pants: !current.pants }))}>{visible.pants ? "✓" : ""}</button></div>
+        <div className={`layer-card ${selected === "body" ? "selected" : ""}`}><button className="select-layer" onClick={() => setSelected("body")}><span className="layer-eye">●</span><span><strong>Body côtelé clair</strong><small>HAUT · CALQUE 01</small></span></button><button className="toggle-layer" aria-label={`${visible.body ? "Masquer" : "Afficher"} le body côtelé`} onClick={() => toggleLayer("body")}>{visible.body ? "✓" : ""}</button></div>
+        <div className={`layer-card ${selected === "shirt" ? "selected" : ""}`}><button className="select-layer" onClick={() => setSelected("shirt")}><span className="layer-eye">●</span><span><strong>Chemise carreaux</strong><small>HAUT · CALQUE 02</small></span></button><button className="toggle-layer" aria-label={`${visible.shirt ? "Masquer" : "Afficher"} la chemise à carreaux`} onClick={() => toggleLayer("shirt")}>{visible.shirt ? "✓" : ""}</button></div>
+        <div className={`layer-card ${selected === "sweater" ? "selected" : ""}`}><button className="select-layer" onClick={() => setSelected("sweater")}><span className="layer-eye">●</span><span><strong>Pull côtelé clair</strong><small>HAUT · CALQUE 03</small></span></button><button className="toggle-layer" aria-label={`${visible.sweater ? "Masquer" : "Afficher"} le pull côtelé`} onClick={() => toggleLayer("sweater")}>{visible.sweater ? "✓" : ""}</button></div>
+        <div className={`layer-card ${selected === "pants" ? "selected" : ""}`}><button className="select-layer" onClick={() => setSelected("pants")}><span className="layer-eye">●</span><span><strong>Pantalon oursons</strong><small>BAS · CALQUE 04</small></span></button><button className="toggle-layer" aria-label={`${visible.pants ? "Masquer" : "Afficher"} le pantalon à oursons`} onClick={() => toggleLayer("pants")}>{visible.pants ? "✓" : ""}</button></div>
       </div>
     </section>
     <section className="calibration-panel">
