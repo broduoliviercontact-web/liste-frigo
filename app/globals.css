@@ -188,6 +188,29 @@ h1 { margin: 0; font-size: clamp(31px, 7vw, 42px); line-height: .95; letter-spac
   .stage { display: block; padding: 0; }
   .device { width: 100vw; height: 100dvh; max-height: none; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none; }
   .prototype-note { display: none; }
+
+  /* Keep the complete crèche brief visible on short phone/e-paper screens. */
+  .creche-page { padding: 16px 20px 10px; overflow: hidden; }
+  .creche-header { padding-bottom: 9px; }
+  .creche-header h1 { font-size: 36px; }
+  .weather-now strong { font-size: 34px; }
+  .weather-now > span { font-size: 26px; }
+  .weather-demo { padding-top: 7px; }
+  .weather-demo button { min-height: 29px; font-size: 8px; }
+  .morning-card { min-height: 0; padding: 8px 0 7px; }
+  .period-title strong, .evening-card > div > strong { font-size: 25px; }
+  .period-title > span { padding: 5px 7px; font-size: 10px; }
+  .avatar-and-clothes { grid-template-columns: 43% 57%; min-height: 0; height: clamp(210px, 31dvh, 255px); }
+  .baby-avatar { height: 100%; }
+  .avatar-and-clothes li { padding: 8px 0; font-size: 14px; }
+  .avatar-and-clothes li::before { width: 22px; height: 22px; margin-right: 6px; }
+  .evening-card { padding: 8px 0; }
+  .sun-advice { gap: 7px; }
+  .sun-advice > span { font-size: 32px; }
+  .sun-advice p { font-size: 11px; }
+  .weather-update { margin-top: 7px; font-size: 9px; }
+  .creche-page > .app-nav { margin-top: 7px; }
+  .creche-page .app-nav button { min-height: 41px; }
 }
 
 @media (max-height: 760px) and (min-width: 601px) {
