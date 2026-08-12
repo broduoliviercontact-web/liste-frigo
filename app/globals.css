@@ -74,6 +74,46 @@ h1 { margin: 0; font-size: clamp(31px, 7vw, 42px); line-height: .95; letter-spac
 .sync-line.error { color: #555; }
 .sync-line.error span { background: transparent; border: 2px solid #111; }
 @keyframes sync-pulse { 50% { opacity: .25; } }
+.app-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.app-nav button { min-height: 48px; border: 2px solid #111; background: transparent; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 18px; font-weight: 800; text-transform: uppercase; }
+.app-nav button.active { background: #111; color: #fff; }
+.app-nav button span { font-size: 12px; letter-spacing: .06em; }
+
+.creche-page { min-height: 0; height: 100%; display: flex; flex-direction: column; padding: 24px 26px 18px; }
+.creche-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 16px; border-bottom: 3px solid #111; }
+.weather-now { display: grid; grid-template-columns: auto auto; align-items: center; gap: 0 9px; text-align: right; }
+.weather-now strong { font-size: 38px; line-height: 1; }
+.weather-now > span { font-size: 30px; filter: grayscale(1); }
+.weather-now small { grid-column: 1 / 3; font-size: 10px; font-weight: 800; letter-spacing: .12em; }
+.morning-card { padding: 18px 0; border-bottom: 3px solid #111; }
+.period-title { display: flex; justify-content: space-between; align-items: flex-end; }
+.period-title strong, .evening-card > div > strong { font-size: 28px; }
+.period-title > span { padding: 6px 9px; border: 2px solid #111; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.avatar-and-clothes { display: grid; grid-template-columns: 42% 58%; align-items: center; min-height: 320px; }
+.avatar-and-clothes ul { list-style: none; margin: 0; padding: 0; }
+.avatar-and-clothes li { padding: 12px 0; border-bottom: 2px solid #111; font-size: 15px; font-weight: 800; }
+.avatar-and-clothes li::before { content: '✓'; display: inline-grid; place-items: center; width: 24px; height: 24px; margin-right: 8px; background: #111; color: #fff; }
+.baby-avatar { position: relative; width: 150px; height: 290px; margin: 10px auto 0; }
+.baby-head { position: absolute; width: 82px; height: 82px; top: 35px; left: 34px; border: 4px solid #111; border-radius: 48% 48% 44% 44%; background: #f8f7f1; z-index: 3; }
+.baby-head i, .baby-head b { position: absolute; top: 34px; width: 6px; height: 6px; border-radius: 50%; background: #111; }
+.baby-head i { left: 21px; } .baby-head b { right: 21px; }
+.sun-hat { position: absolute; top: 20px; left: 22px; width: 106px; height: 30px; border: 4px solid #111; border-radius: 50%; background: #fff; z-index: 5; }
+.sun-hat::before { content: ''; position: absolute; width: 70px; height: 37px; left: 14px; bottom: 8px; border: 4px solid #111; border-radius: 50% 50% 20% 20%; background: #fff; }
+.tshirt { position: absolute; top: 111px; left: 31px; width: 88px; height: 85px; border: 4px solid #111; background: #ddd; z-index: 2; }
+.tshirt i, .tshirt b { position: absolute; top: 3px; width: 32px; height: 55px; border: 4px solid #111; background: #ddd; }
+.tshirt i { left: -27px; transform: rotate(18deg); } .tshirt b { right: -27px; transform: rotate(-18deg); }
+.shorts { position: absolute; top: 192px; left: 31px; width: 88px; height: 48px; border: 4px solid #111; background: #111; z-index: 3; }
+.shorts i, .shorts b { position: absolute; top: 36px; width: 39px; height: 30px; background: #111; }
+.shorts i { left: -4px; } .shorts b { right: -4px; }
+.baby-legs i, .baby-legs b { position: absolute; top: 244px; width: 22px; height: 43px; border: 4px solid #111; background: #f8f7f1; }
+.baby-legs i { left: 38px; } .baby-legs b { right: 38px; }
+.evening-card { padding: 16px 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #111; }
+.sun-advice { display: flex; align-items: center; gap: 10px; }
+.sun-advice > span { font-size: 38px; filter: grayscale(1); }
+.sun-advice p { margin: 0; font-size: 12px; line-height: 1.35; }
+.weather-update { margin: 12px 0 0; text-align: center; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.weather-update span { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #111; }
+.creche-page > .app-nav { margin-top: auto; }
 
 .overlay, .write-screen { position: absolute; inset: 0; z-index: 5; background: rgb(248 247 241 / 96%); }
 .list-manager { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; padding: 25px; background: #f8f7f1; }

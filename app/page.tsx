@@ -82,6 +82,32 @@ function emojiFor(label: string) {
   )?.[1] ?? "🛒";
 }
 
+function CrechePage({ onLists }: { onLists: () => void }) {
+  return <div className="creche-page">
+    <header className="creche-header">
+      <div><p className="eyebrow">MÉTÉO CRÈCHE</p><h1>Pantin</h1></div>
+      <div className="weather-now"><strong>20°</strong><span>☀</span><small>12 AOÛT</small></div>
+    </header>
+    <section className="morning-card">
+      <div className="period-title"><div><p className="eyebrow">DÉPART · 8H</p><strong>20,3°C</strong></div><span>0% pluie</span></div>
+      <div className="avatar-and-clothes">
+        <div className="baby-avatar" aria-label="Avatar portant un t-shirt, un short et un chapeau">
+          <div className="sun-hat" /><div className="baby-head"><i /><b /></div>
+          <div className="tshirt"><i /><b /></div><div className="shorts"><i /><b /></div>
+          <div className="baby-legs"><i /><b /></div>
+        </div>
+        <ul><li>Body manches courtes</li><li>T-shirt léger</li><li>Short léger</li></ul>
+      </div>
+    </section>
+    <section className="evening-card">
+      <div><p className="eyebrow">RETOUR · 17H</p><strong>34,7°C</strong></div>
+      <div className="sun-advice"><span>☀</span><p><strong>Très chaud</strong><br />Chapeau + crème solaire</p></div>
+    </section>
+    <p className="weather-update"><span /> Brief du 12 août · démonstration</p>
+    <nav className="app-nav" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button></nav>
+  </div>;
+}
+
 export default function Home() {
   const [lists, setLists] = useState(initialLists);
   const [currentListId, setCurrentListId] = useState(1);
@@ -95,6 +121,7 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
+  const [view, setView] = useState<"lists" | "creche">("lists");
 
   const loadLists = useCallback(async (quiet = false) => {
     if (!quiet) setSyncState("loading");
@@ -197,6 +224,7 @@ export default function Home() {
   return (
     <main className="stage">
       <section className="device" aria-label="Aperçu de l'écran Liste Frigo">
+        {view === "creche" ? <CrechePage onLists={() => setView("lists")} /> : <>
         <header className="topbar">
           <div>
             <p className="eyebrow">LISTE PARTAGÉE</p>
@@ -243,6 +271,7 @@ export default function Home() {
             <button onClick={clearChecked}>Effacer cochés</button>
           </div>
           <p className={`sync-line ${syncState}`}><span /> {syncState === "loading" ? "Synchronisation…" : syncState === "error" ? "Hors connexion — réessayer" : "Synchronisé"}</p>
+          <nav className="app-nav" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button></nav>
         </footer>
 
         {showAdd && (
@@ -322,6 +351,7 @@ export default function Home() {
             </div>
           </div>
         )}
+        </>}
       </section>
       <p className="prototype-note">Prototype portrait · LILYGO T5 4,7″ · 540 × 960</p>
     </main>
