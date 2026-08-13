@@ -1,5 +1,7 @@
 const INFO_URL = "https://velib-metropole-opendata.smovengo.cloud/opendata/Velib_Metropole/station_information.json";
 const STATUS_URL = "https://velib-metropole-opendata.smovengo.cloud/opendata/Velib_Metropole/station_status.json";
+const FALLBACK_INFO_URL = "https://api.citybik.es/gbfs/2/velib/station_information.json";
+const FALLBACK_STATUS_URL = "https://api.citybik.es/gbfs/2/velib/station_status.json";
 
 // 11 avenue du Colonel Fabien, Pantin — point de départ utilisé pour le classement.
 const HOME = { lat: 48.8932, lon: 2.4222 };
@@ -44,11 +46,16 @@ function bikeCounts(status: StationStatus) {
 
 export async function GET() {
   try {
-    const [informationResponse, statusResponse] = await Promise.all([
-      fetch(INFO_URL, { headers: { Accept: "application/json" }, cf: { cacheTtl: 300 } } as RequestInit),
-      fetch(STATUS_URL, { headers: { Accept: "application/json" }, cf: { cacheTtl: 20 } } as RequestInit),
-    ]);
-    if (!informationResponse.ok || !statusResponse.ok) throw new Error("Données Vélib indisponibles");
+    let informationResponse: Response | null = null;
+    let statusResponse: Response | null = null;
+    for (const [informationUrl, statusUrl] of [[INFO_URL, STATUS_URL], [FALLBACK_INFO_URL, FALLBACK_STATUS_URL]]) {
+      const responses = await Promise.all([
+        fetch(informationUrl, { headers: { Accept: "application/json" }, cf: { cacheTtl: 300 } } as RequestInit),
+        fetch(statusUrl, { headers: { Accept: "application/json" }, cf: { cacheTtl: 20 } } as RequestInit),
+      ]).catch(() => [null, null] as const);
+      if (responses[0]?.ok && responses[1]?.ok) { informationResponse = responses[0]; statusResponse = responses[1]; break; }
+    }
+    if (!informationResponse || !statusResponse) throw new Error("Données Vélib indisponibles");
 
     const information = await informationResponse.json() as { data?: { stations?: StationInfo[] } };
     const statuses = await statusResponse.json() as { data?: { stations?: StationStatus[] }; last_updated?: number };
