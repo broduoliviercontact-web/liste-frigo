@@ -217,12 +217,12 @@ h1 { margin: 0; font-size: clamp(31px, 7vw, 42px); line-height: .95; letter-spac
   .weather-now > span { font-size: 26px; }
   .weather-demo { padding-top: 7px; }
   .weather-demo button { min-height: 29px; font-size: 8px; }
-  .morning-card { min-height: 0; padding: 8px 0 7px; }
+  .morning-card { min-height: 0; padding: 8px 0 7px; overflow: hidden; }
   .period-title strong, .evening-card > div > strong { font-size: 25px; }
   .period-title > span { padding: 5px 7px; font-size: 10px; }
   .avatar-and-clothes { grid-template-columns: 43% 57%; min-height: 0; height: clamp(210px, 31dvh, 255px); overflow: hidden; }
-  .baby-avatar { min-height: 0; height: 100%; }
-  .baby-avatar img { height: 88%; object-position: center bottom; }
+  .baby-avatar { min-height: 0; height: 100%; padding: 4px 0 34px; }
+  .baby-avatar img { height: 100%; object-position: center bottom; }
   .avatar-and-clothes li { padding: 8px 0; font-size: 14px; }
   .avatar-and-clothes li::before { width: 22px; height: 22px; margin-right: 6px; }
   .evening-card { padding: 8px 0; }
