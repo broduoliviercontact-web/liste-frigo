@@ -94,7 +94,7 @@ const weatherScenarios: Record<WeatherMode, {
   froid: { label: "Froid", icon: "❄", now: "3°", morning: "2,4°C", evening: "6,8°C", rain: "10% pluie", image: "/avatars/cesar-froid-epaper.png", clothes: ["Manteau chaud", "Bonnet + écharpe", "Pantalon + bottines"], feeling: "Très froid", advice: "Bien couvrir les extrémités" },
 };
 
-function CrechePage({ onLists, onWardrobe, onVelib }: { onLists: () => void; onWardrobe: () => void; onVelib: () => void }) {
+function CrechePage({ onLists, onWardrobe, onVelib, onTransport }: { onLists: () => void; onWardrobe: () => void; onVelib: () => void; onTransport: () => void }) {
   const [mode, setMode] = useState<WeatherMode>("canicule");
   const weather = weatherScenarios[mode];
   return <div className="creche-page">
@@ -117,13 +117,13 @@ function CrechePage({ onLists, onWardrobe, onVelib }: { onLists: () => void; onW
       <div className="sun-advice"><span>{weather.icon}</span><p><strong>{weather.feeling}</strong><br />{weather.advice}</p></div>
     </section>
     <p className="weather-update"><span /> Brief du 12 août · démonstration</p>
-    <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button><button onClick={onWardrobe}>▣ <span>Tenues</span></button><button onClick={onVelib}>⚡ <span>Vélib</span></button></nav>
+    <nav className="app-nav five" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button><button onClick={onWardrobe}>▣ <span>Tenues</span></button><button onClick={onVelib}>⚡ <span>Vélib</span></button><button onClick={onTransport}>Ⓜ <span>Transp.</span></button></nav>
   </div>;
 }
 
 type VelibStation = { id: string; name: string; distance: number; electric: number; mechanical: number; docks: number };
 
-function VelibPage({ onLists, onCreche, onWardrobe }: { onLists: () => void; onCreche: () => void; onWardrobe: () => void }) {
+function VelibPage({ onLists, onCreche, onWardrobe, onTransport }: { onLists: () => void; onCreche: () => void; onWardrobe: () => void; onTransport: () => void }) {
   const [stations, setStations] = useState<VelibStation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -154,7 +154,7 @@ function VelibPage({ onLists, onCreche, onWardrobe }: { onLists: () => void; onC
       </article>)}
     </section>
     <p className="velib-update"><span /> {updatedAt ? `Actualisé à ${new Date(updatedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : "Données Vélib en direct"}</p>
-    <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button onClick={onWardrobe}>▣ <span>Tenues</span></button><button className="active">⚡ <span>Vélib</span></button></nav>
+    <nav className="app-nav five" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button onClick={onWardrobe}>▣ <span>Tenues</span></button><button className="active">⚡ <span>Vélib</span></button><button onClick={onTransport}>Ⓜ <span>Transp.</span></button></nav>
   </div>;
 }
 
@@ -169,7 +169,7 @@ const outfits = [
   { id: "ete", name: "Été léger", detail: "T-shirt · short", image: "/outfits/cesar-tenue-ete-epaper.png" },
 ];
 
-function WardrobePage({ onLists, onCreche, onVelib }: { onLists: () => void; onCreche: () => void; onVelib: () => void }) {
+function WardrobePage({ onLists, onCreche, onVelib, onTransport }: { onLists: () => void; onCreche: () => void; onVelib: () => void; onTransport: () => void }) {
   const [selected, setSelected] = useState("canicule");
   const current = outfits.find((outfit) => outfit.id === selected) ?? outfits[0];
 
@@ -184,7 +184,35 @@ function WardrobePage({ onLists, onCreche, onVelib }: { onLists: () => void; onC
         <img src={outfit.image} alt="" /><span><strong>{outfit.name}</strong><small>{outfit.detail}</small></span>
       </button>)}
     </section>
-    <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button className="active">▣ <span>Tenues</span></button><button onClick={onVelib}>⚡ <span>Vélib</span></button></nav>
+    <nav className="app-nav five" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button className="active">▣ <span>Tenues</span></button><button onClick={onVelib}>⚡ <span>Vélib</span></button><button onClick={onTransport}>Ⓜ <span>Transp.</span></button></nav>
+  </div>;
+}
+
+function TransportPage({ onLists, onCreche, onWardrobe, onVelib }: { onLists: () => void; onCreche: () => void; onWardrobe: () => void; onVelib: () => void }) {
+  return <div className="transport-page">
+    <header className="transport-header">
+      <div><p className="eyebrow">DÉPARTS À PROXIMITÉ</p><h1>Transports</h1></div>
+      <span className="metro-sign">M</span>
+    </header>
+    <section className="station-summary">
+      <div><p className="eyebrow">STATION LA PLUS PROCHE</p><strong>Raymond-Queneau</strong><span>Bobigny · Pantin</span></div>
+      <div className="walk-time"><strong>5</strong><span>min<br />à pied</span></div>
+    </section>
+    <section className="metro-board" aria-label="Métro ligne 5">
+      <header><span className="line-five">5</span><div><p className="eyebrow">MÉTRO</p><strong>Ligne 5</strong></div></header>
+      <article><div><span>Direction</span><strong>Place d’Italie</strong></div><p className="awaiting-time">— <small>min</small></p></article>
+      <article><div><span>Direction</span><strong>Bobigny–Pablo Picasso</strong></div><p className="awaiting-time">— <small>min</small></p></article>
+    </section>
+    <section className="nearby-buses">
+      <p className="eyebrow">BUS À LA STATION</p>
+      <div>{["145", "147", "318", "330"].map((line) => <span key={line}>{line}</span>)}</div>
+    </section>
+    <section className="transport-connect">
+      <strong>Temps réel prêt à connecter</strong>
+      <p>Ajoute la clé gratuite Île-de-France Mobilités pour afficher les prochains passages et les perturbations.</p>
+    </section>
+    <p className="transport-update"><span /> Station et lignes configurées</p>
+    <nav className="app-nav five" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button onClick={onWardrobe}>▣ <span>Tenues</span></button><button onClick={onVelib}>⚡ <span>Vélib</span></button><button className="active">Ⓜ <span>Transp.</span></button></nav>
   </div>;
 }
 
@@ -201,7 +229,7 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
-  const [view, setView] = useState<"lists" | "creche" | "wardrobe" | "velib">("lists");
+  const [view, setView] = useState<"lists" | "creche" | "wardrobe" | "velib" | "transport">("lists");
 
   const loadLists = useCallback(async (quiet = false) => {
     if (!quiet) setSyncState("loading");
@@ -304,7 +332,7 @@ export default function Home() {
   return (
     <main className="stage">
       <section className="device" aria-label="Aperçu de l'écran Liste Frigo">
-        {view === "creche" ? <CrechePage onLists={() => setView("lists")} onWardrobe={() => setView("wardrobe")} onVelib={() => setView("velib")} /> : view === "wardrobe" ? <WardrobePage onLists={() => setView("lists")} onCreche={() => setView("creche")} onVelib={() => setView("velib")} /> : view === "velib" ? <VelibPage onLists={() => setView("lists")} onCreche={() => setView("creche")} onWardrobe={() => setView("wardrobe")} /> : <>
+        {view === "creche" ? <CrechePage onLists={() => setView("lists")} onWardrobe={() => setView("wardrobe")} onVelib={() => setView("velib")} onTransport={() => setView("transport")} /> : view === "wardrobe" ? <WardrobePage onLists={() => setView("lists")} onCreche={() => setView("creche")} onVelib={() => setView("velib")} onTransport={() => setView("transport")} /> : view === "velib" ? <VelibPage onLists={() => setView("lists")} onCreche={() => setView("creche")} onWardrobe={() => setView("wardrobe")} onTransport={() => setView("transport")} /> : view === "transport" ? <TransportPage onLists={() => setView("lists")} onCreche={() => setView("creche")} onWardrobe={() => setView("wardrobe")} onVelib={() => setView("velib")} /> : <>
         <header className="topbar">
           <div>
             <p className="eyebrow">LISTE PARTAGÉE</p>
@@ -351,7 +379,7 @@ export default function Home() {
             <button onClick={clearChecked}>Effacer cochés</button>
           </div>
           <p className={`sync-line ${syncState}`}><span /> {syncState === "loading" ? "Synchronisation…" : syncState === "error" ? "Hors connexion — réessayer" : "Synchronisé"}</p>
-          <nav className="app-nav four" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button><button onClick={() => setView("wardrobe")}>▣ <span>Tenues</span></button><button onClick={() => setView("velib")}>⚡ <span>Vélib</span></button></nav>
+          <nav className="app-nav five" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button><button onClick={() => setView("wardrobe")}>▣ <span>Tenues</span></button><button onClick={() => setView("velib")}>⚡ <span>Vélib</span></button><button onClick={() => setView("transport")}>Ⓜ <span>Transp.</span></button></nav>
         </footer>
 
         {showAdd && (
