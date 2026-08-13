@@ -94,7 +94,7 @@ const weatherScenarios: Record<WeatherMode, {
   froid: { label: "Froid", icon: "❄", now: "3°", morning: "2,4°C", evening: "6,8°C", rain: "10% pluie", image: "/avatars/cesar-froid-epaper.png", clothes: ["Manteau chaud", "Bonnet + écharpe", "Pantalon + bottines"], feeling: "Très froid", advice: "Bien couvrir les extrémités" },
 };
 
-function CrechePage({ onLists, onWardrobe }: { onLists: () => void; onWardrobe: () => void }) {
+function CrechePage({ onLists, onWardrobe, onVelib }: { onLists: () => void; onWardrobe: () => void; onVelib: () => void }) {
   const [mode, setMode] = useState<WeatherMode>("canicule");
   const weather = weatherScenarios[mode];
   return <div className="creche-page">
@@ -117,7 +117,44 @@ function CrechePage({ onLists, onWardrobe }: { onLists: () => void; onWardrobe: 
       <div className="sun-advice"><span>{weather.icon}</span><p><strong>{weather.feeling}</strong><br />{weather.advice}</p></div>
     </section>
     <p className="weather-update"><span /> Brief du 12 août · démonstration</p>
-    <nav className="app-nav three" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button><button onClick={onWardrobe}>▣ <span>Tenues</span></button></nav>
+    <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button><button onClick={onWardrobe}>▣ <span>Tenues</span></button><button onClick={onVelib}>⚡ <span>Vélib</span></button></nav>
+  </div>;
+}
+
+type VelibStation = { id: string; name: string; distance: number; electric: number; mechanical: number; docks: number };
+
+function VelibPage({ onLists, onCreche, onWardrobe }: { onLists: () => void; onCreche: () => void; onWardrobe: () => void }) {
+  const [stations, setStations] = useState<VelibStation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const response = await fetch("/api/velib", { cache: "no-store" });
+      if (!response.ok) throw new Error("velib");
+      const data = await response.json() as { stations: VelibStation[]; updatedAt: number };
+      setStations(data.stations); setUpdatedAt(data.updatedAt); setError(false);
+    } catch { setError(true); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { refresh(); const timer = window.setInterval(refresh, 30000); return () => window.clearInterval(timer); }, [refresh]);
+
+  return <div className="velib-page">
+    <header className="velib-header"><div><p className="eyebrow">AUTOUR DE CHEZ NOUS</p><h1>Vélib proches</h1></div><span className="velib-bolt">⚡</span></header>
+    <div className="velib-priority"><strong>ÉLECTRIQUES EN PRIORITÉ</strong><span>Depuis Colonel Fabien · Pantin</span></div>
+    <section className="velib-stations" aria-label="Stations Vélib les plus proches" aria-live="polite">
+      {loading ? <p className="velib-message">Recherche des vélos disponibles…</p> : error ? <button className="velib-message" onClick={refresh}>Données indisponibles · Réessayer</button> : stations.map((station, index) => <article className={`velib-station ${station.electric > 0 ? "has-electric" : ""}`} key={station.id}>
+        <div className="velib-rank"><strong>{index + 1}</strong><span>{station.distance} m</span></div>
+        <div className="velib-name"><strong>{station.name}</strong>{station.electric > 0 && <span>⚡ Disponible</span>}</div>
+        <div className="bike-count electric"><strong>{station.electric}</strong><span>élect.</span></div>
+        <div className="bike-count"><strong>{station.mechanical}</strong><span>méca.</span></div>
+        <div className="bike-count docks"><strong>{station.docks}</strong><span>places</span></div>
+      </article>)}
+    </section>
+    <p className="velib-update"><span /> {updatedAt ? `Actualisé à ${new Date(updatedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : "Données Vélib en direct"}</p>
+    <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button onClick={onWardrobe}>▣ <span>Tenues</span></button><button className="active">⚡ <span>Vélib</span></button></nav>
   </div>;
 }
 
@@ -132,7 +169,7 @@ const outfits = [
   { id: "ete", name: "Été léger", detail: "T-shirt · short", image: "/outfits/cesar-tenue-ete-epaper.png" },
 ];
 
-function WardrobePage({ onLists, onCreche }: { onLists: () => void; onCreche: () => void }) {
+function WardrobePage({ onLists, onCreche, onVelib }: { onLists: () => void; onCreche: () => void; onVelib: () => void }) {
   const [selected, setSelected] = useState("canicule");
   const current = outfits.find((outfit) => outfit.id === selected) ?? outfits[0];
 
@@ -147,7 +184,7 @@ function WardrobePage({ onLists, onCreche }: { onLists: () => void; onCreche: ()
         <img src={outfit.image} alt="" /><span><strong>{outfit.name}</strong><small>{outfit.detail}</small></span>
       </button>)}
     </section>
-    <nav className="app-nav three" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button className="active">▣ <span>Tenues</span></button></nav>
+    <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button className="active">▣ <span>Tenues</span></button><button onClick={onVelib}>⚡ <span>Vélib</span></button></nav>
   </div>;
 }
 
@@ -164,7 +201,7 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
-  const [view, setView] = useState<"lists" | "creche" | "wardrobe">("lists");
+  const [view, setView] = useState<"lists" | "creche" | "wardrobe" | "velib">("lists");
 
   const loadLists = useCallback(async (quiet = false) => {
     if (!quiet) setSyncState("loading");
@@ -267,7 +304,7 @@ export default function Home() {
   return (
     <main className="stage">
       <section className="device" aria-label="Aperçu de l'écran Liste Frigo">
-        {view === "creche" ? <CrechePage onLists={() => setView("lists")} onWardrobe={() => setView("wardrobe")} /> : view === "wardrobe" ? <WardrobePage onLists={() => setView("lists")} onCreche={() => setView("creche")} /> : <>
+        {view === "creche" ? <CrechePage onLists={() => setView("lists")} onWardrobe={() => setView("wardrobe")} onVelib={() => setView("velib")} /> : view === "wardrobe" ? <WardrobePage onLists={() => setView("lists")} onCreche={() => setView("creche")} onVelib={() => setView("velib")} /> : view === "velib" ? <VelibPage onLists={() => setView("lists")} onCreche={() => setView("creche")} onWardrobe={() => setView("wardrobe")} /> : <>
         <header className="topbar">
           <div>
             <p className="eyebrow">LISTE PARTAGÉE</p>
@@ -314,7 +351,7 @@ export default function Home() {
             <button onClick={clearChecked}>Effacer cochés</button>
           </div>
           <p className={`sync-line ${syncState}`}><span /> {syncState === "loading" ? "Synchronisation…" : syncState === "error" ? "Hors connexion — réessayer" : "Synchronisé"}</p>
-          <nav className="app-nav three" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button><button onClick={() => setView("wardrobe")}>▣ <span>Tenues</span></button></nav>
+          <nav className="app-nav four" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button><button onClick={() => setView("wardrobe")}>▣ <span>Tenues</span></button><button onClick={() => setView("velib")}>⚡ <span>Vélib</span></button></nav>
         </footer>
 
         {showAdd && (

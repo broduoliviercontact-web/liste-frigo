@@ -81,6 +81,9 @@ h1 { margin: 0; font-size: clamp(31px, 7vw, 42px); line-height: .95; letter-spac
 .app-nav.three { grid-template-columns: repeat(3, 1fr); }
 .app-nav.three button { gap: 5px; padding: 4px; font-size: 15px; }
 .app-nav.three button span { font-size: 10px; }
+.app-nav.four { grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.app-nav.four button { min-width: 0; gap: 3px; padding: 3px; font-size: 13px; }
+.app-nav.four button span { font-size: 9px; }
 
 .creche-page { min-height: 0; height: 100%; display: flex; flex-direction: column; padding: 24px 26px 18px; }
 .creche-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 16px; border-bottom: 3px solid #111; }
@@ -126,6 +129,32 @@ h1 { margin: 0; font-size: clamp(31px, 7vw, 42px); line-height: .95; letter-spac
 .outfit-gallery strong { font-size: 12px; line-height: 1.05; }
 .outfit-gallery small { margin-top: 5px; font-size: 8px; font-weight: 800; text-transform: uppercase; }
 .wardrobe-page > .app-nav { margin-top: auto; }
+
+.velib-page { min-height: 0; height: 100%; display: flex; flex-direction: column; padding: 22px 26px 18px; }
+.velib-header { display: flex; align-items: flex-end; justify-content: space-between; padding-bottom: 14px; border-bottom: 3px solid #111; }
+.velib-header h1 { font-size: 34px; }
+.velib-bolt { width: 52px; height: 52px; display: grid; place-items: center; border: 3px solid #111; font-size: 27px; filter: grayscale(1); }
+.velib-priority { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 2px solid #111; }
+.velib-priority strong { font-size: 11px; letter-spacing: .08em; }
+.velib-priority span { font-size: 9px; font-weight: 800; }
+.velib-stations { min-height: 0; flex: 1; overflow-y: auto; }
+.velib-station { min-height: 102px; display: grid; grid-template-columns: 58px minmax(0, 1fr) 48px 48px 48px; align-items: center; border-bottom: 2px solid #111; }
+.velib-station.has-electric { border-left: 7px solid #111; }
+.velib-rank { text-align: center; }
+.velib-rank strong { display: block; font-size: 28px; line-height: 1; }
+.velib-rank span { font-size: 9px; font-weight: 800; }
+.velib-name { min-width: 0; padding: 0 8px; }
+.velib-name > strong { display: block; font-size: 14px; line-height: 1.1; }
+.velib-name > span { display: inline-block; margin-top: 7px; padding: 3px 5px; background: #111; color: #fff; font-size: 8px; font-weight: 900; text-transform: uppercase; }
+.bike-count { text-align: center; border-left: 1px solid #999; }
+.bike-count strong, .bike-count span { display: block; }
+.bike-count strong { font-size: 22px; line-height: 1; }
+.bike-count span { margin-top: 4px; font-size: 8px; font-weight: 800; }
+.bike-count.electric strong { font-size: 28px; }
+.velib-message { width: 100%; margin-top: 28px; border: 2px solid #111; background: transparent; padding: 24px; text-align: center; font-size: 14px; font-weight: 800; }
+.velib-update { margin: 8px 0 0; text-align: center; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
+.velib-update span { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: #111; }
+.velib-page > .app-nav { margin-top: 8px; }
 
 .overlay, .write-screen { position: absolute; inset: 0; z-index: 5; background: rgb(248 247 241 / 96%); }
 .list-manager { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; padding: 25px; background: #f8f7f1; }
@@ -191,8 +220,9 @@ h1 { margin: 0; font-size: clamp(31px, 7vw, 42px); line-height: .95; letter-spac
   .morning-card { min-height: 0; padding: 8px 0 7px; }
   .period-title strong, .evening-card > div > strong { font-size: 25px; }
   .period-title > span { padding: 5px 7px; font-size: 10px; }
-  .avatar-and-clothes { grid-template-columns: 43% 57%; min-height: 0; height: clamp(210px, 31dvh, 255px); }
-  .baby-avatar { height: 100%; }
+  .avatar-and-clothes { grid-template-columns: 43% 57%; min-height: 0; height: clamp(210px, 31dvh, 255px); overflow: hidden; }
+  .baby-avatar { min-height: 0; height: 100%; }
+  .baby-avatar img { height: 88%; object-position: center bottom; }
   .avatar-and-clothes li { padding: 8px 0; font-size: 14px; }
   .avatar-and-clothes li::before { width: 22px; height: 22px; margin-right: 6px; }
   .evening-card { padding: 8px 0; }
