@@ -1,6 +1,8 @@
 import { asc, eq, inArray, and } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { shoppingItems, shoppingLists } from "../../../db/schema";
+import { appState, shoppingItems, shoppingLists } from "../../../db/schema";
+
+const ACTIVE_LIST_KEY = "active_list_id";
 
 async function readAll() {
   const db = await getDb();
@@ -14,8 +16,26 @@ async function readAll() {
   return lists.map((list) => ({ ...list, items: items.filter((item) => item.listId === list.id) }));
 }
 
+async function readActiveListId(lists: Awaited<ReturnType<typeof readAll>>) {
+  const db = await getDb();
+  const [row] = await db.select().from(appState).where(eq(appState.key, ACTIVE_LIST_KEY)).limit(1);
+  const activeListId = Number(row?.value);
+  return lists.some((list) => list.id === activeListId) ? activeListId : lists[0]?.id ?? 0;
+}
+
+async function setActiveListId(id: number) {
+  const db = await getDb();
+  await db
+    .insert(appState)
+    .values({ key: ACTIVE_LIST_KEY, value: String(id) })
+    .onConflictDoUpdate({ target: appState.key, set: { value: String(id) } });
+}
+
 export async function GET() {
-  try { return Response.json({ lists: await readAll() }); }
+  try {
+    const lists = await readAll();
+    return Response.json({ lists, activeListId: await readActiveListId(lists) });
+  }
   catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Erreur base de données" }, { status: 500 }); }
 }
 
@@ -30,8 +50,10 @@ export async function POST(request: Request) {
       case "addItem": { const label = body.label?.trim(); if (!body.listId || !label) return Response.json({ error: "Données manquantes" }, { status: 400 }); await db.insert(shoppingItems).values({ listId: body.listId, label }); break; }
       case "toggleItem": if (body.id) await db.update(shoppingItems).set({ checked: Boolean(body.checked) }).where(eq(shoppingItems.id, body.id)); break;
       case "clearChecked": if (body.listId) await db.delete(shoppingItems).where(and(eq(shoppingItems.listId, body.listId), eq(shoppingItems.checked, true))); break;
+      case "selectList": if (body.id) await setActiveListId(body.id); break;
       default: return Response.json({ error: "Action inconnue" }, { status: 400 });
     }
-    return Response.json({ lists: await readAll() });
+    const lists = await readAll();
+    return Response.json({ lists, activeListId: await readActiveListId(lists) });
   } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Erreur base de données" }, { status: 500 }); }
 }

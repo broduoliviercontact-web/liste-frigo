@@ -236,9 +236,9 @@ export default function Home() {
     try {
       const response = await fetch("/api/lists", { cache: "no-store" });
       if (!response.ok) throw new Error("sync");
-      const data = await response.json() as { lists: ShoppingList[] };
+      const data = await response.json() as { lists: ShoppingList[]; activeListId?: number };
       setLists(data.lists);
-      setCurrentListId((current) => data.lists.some((list) => list.id === current) ? current : data.lists[0]?.id ?? 0);
+      setCurrentListId((current) => data.activeListId && data.lists.some((list) => list.id === data.activeListId) ? data.activeListId : data.lists.some((list) => list.id === current) ? current : data.lists[0]?.id ?? 0);
       setSyncState("synced");
     } catch { setSyncState("error"); }
   }, []);
@@ -254,8 +254,10 @@ export default function Home() {
     try {
       const response = await fetch("/api/lists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(action) });
       if (!response.ok) throw new Error("sync");
-      const data = await response.json() as { lists: ShoppingList[] };
-      setLists(data.lists); setSyncState("synced"); return data.lists;
+      const data = await response.json() as { lists: ShoppingList[]; activeListId?: number };
+      setLists(data.lists);
+      if (data.activeListId && data.lists.some((list) => list.id === data.activeListId)) setCurrentListId(data.activeListId);
+      setSyncState("synced"); return data.lists;
     } catch { setSyncState("error"); return null; }
   }
 
@@ -286,7 +288,11 @@ export default function Home() {
     const name = newListName.trim();
     if (!name) return;
     const updated = await mutate({ action: "createList", name });
-    if (updated?.length) setCurrentListId(updated[updated.length - 1].id);
+    if (updated?.length) {
+      const id = updated[updated.length - 1].id;
+      setCurrentListId(id);
+      await mutate({ action: "selectList", id });
+    }
     setNewListName("");
     setShowLists(false);
   }
@@ -413,7 +419,7 @@ export default function Home() {
                 const count = list.items.filter((item) => !item.checked).length;
                 return (
                   <div className={`list-choice ${list.id === currentListId ? "active" : ""}`} key={list.id}>
-                    <button className="choose-list" onClick={() => { setCurrentListId(list.id); setShowLists(false); }}>
+                    <button className="choose-list" onClick={async () => { setCurrentListId(list.id); setShowLists(false); await mutate({ action: "selectList", id: list.id }); }}>
                       <span>{list.name}</span><small>{count} à acheter</small>
                     </button>
                     <button className="list-tool" onClick={() => renameList(list.id)} aria-label={`Renommer ${list.name}`}>✎</button>

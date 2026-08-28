@@ -8,6 +8,13 @@
       "when": 1786534375063,
       "tag": "0000_romantic_cammi",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787947154774,
+      "tag": "0001_sudden_karnak",
+      "breakpoints": true
     }
   ]
 }

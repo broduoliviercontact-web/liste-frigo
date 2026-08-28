@@ -1,6 +1,9 @@
 import { asc, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "../../../../../db";
-import { shoppingItems, shoppingLists } from "../../../../../db/schema";
+import { appState, shoppingItems, shoppingLists } from "../../../../../db/schema";
+
+const ACTIVE_LIST_KEY = "active_list_id";
 
 type EpaperList = {
   id: number;
@@ -39,9 +42,19 @@ async function readLists(): Promise<EpaperList[]> {
   }));
 }
 
+async function readActiveListId(lists: EpaperList[]) {
+  const db = await getDb();
+  const [row] = await db.select().from(appState).where(eq(appState.key, ACTIVE_LIST_KEY)).limit(1);
+  const activeListId = Number(row?.value);
+  return lists.some((list) => list.id === activeListId) ? activeListId : lists[0]?.id ?? 0;
+}
+
 export async function GET() {
   try {
     const lists = await readLists();
+    const activeListId = await readActiveListId(lists);
+    const activeList = lists.find((list) => list.id === activeListId) ?? lists[0];
+    const orderedLists = activeList ? [activeList, ...lists.filter((list) => list.id !== activeList.id)] : lists;
 
     return Response.json(
       {
@@ -53,6 +66,7 @@ export async function GET() {
           orientation: "portrait",
         },
         activeTab: "listes",
+        activeListId,
         tabs: [
           { id: "listes", label: "Listes", title: "LISTES" },
           { id: "creche", label: "Crèche", title: "CRECHE" },
@@ -64,7 +78,8 @@ export async function GET() {
           listes: {
             status: "ready",
             subtitle: "Synchronise",
-            lists,
+            activeListId,
+            lists: orderedLists,
           },
           creche: {
             status: "placeholder",
