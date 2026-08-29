@@ -1,0 +1,8 @@
+.vscode
+.pio
+test
+build
+secrets.h
+examples/liste_frigo/secrets.h
+__pycache__/
+.DS_Store
