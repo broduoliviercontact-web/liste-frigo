@@ -185,6 +185,7 @@ export default function Home() {
   const [currentListId, setCurrentListId] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
   const [showLists, setShowLists] = useState(false);
+  const [showFullList, setShowFullList] = useState(false);
   const [newItem, setNewItem] = useState("");
   const [newListName, setNewListName] = useState("");
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
@@ -280,8 +281,13 @@ export default function Home() {
         </header>
 
         <div className="summary">
-          <strong>{remaining}</strong>
-          <span>{remaining > 1 ? "articles à acheter" : "article à acheter"}</span>
+          <div>
+            <strong>{remaining}</strong>
+            <span>{remaining > 1 ? "articles à acheter" : "article à acheter"}</span>
+          </div>
+          <button className="full-list-button" onClick={() => setShowFullList(true)}>
+            Voir la liste entière
+          </button>
         </div>
 
         <ul className="shopping-list" aria-label="Articles">
@@ -356,6 +362,34 @@ export default function Home() {
               <div><input id="new-list" value={newListName} onChange={(event) => setNewListName(event.target.value)} placeholder="Ex. Marché" /><button type="submit" className="inverted">+</button></div>
             </form>
           </div>
+        )}
+
+        {showFullList && (
+          <section className="full-list-screen" aria-label={`Liste entière ${currentList?.name}`}>
+            <header className="full-list-header">
+              <div>
+                <p className="eyebrow">SUPERVIE · LISTE COMPLÈTE</p>
+                <h2>{currentList?.name}</h2>
+                <p>{remaining} {remaining > 1 ? "articles à acheter" : "article à acheter"}</p>
+              </div>
+              <button onClick={() => setShowFullList(false)} aria-label="Fermer la liste entière">×</button>
+            </header>
+            <ul className="full-shopping-list" aria-label="Tous les articles">
+              {items.map((item) => (
+                <li key={item.id} className={item.checked ? "checked" : ""}>
+                  <button
+                    className="item-button"
+                    onClick={() => toggle(item.id)}
+                    aria-label={`${item.checked ? "Décocher" : "Cocher"} ${item.label}`}
+                  >
+                    <span className="checkbox" aria-hidden="true">{item.checked ? "✓" : ""}</span>
+                    <span className="item-emoji" aria-hidden="true">{emojiFor(item.label)}</span>
+                    <span className="item-label">{item.label}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         </>}
