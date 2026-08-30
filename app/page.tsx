@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type Item = { id: number; label: string; checked: boolean };
 type ShoppingList = { id: number; name: string; items: Item[] };
@@ -184,14 +184,9 @@ export default function Home() {
   const [lists, setLists] = useState(initialLists);
   const [currentListId, setCurrentListId] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
-  const [showWrite, setShowWrite] = useState(false);
   const [showLists, setShowLists] = useState(false);
   const [newItem, setNewItem] = useState("");
   const [newListName, setNewListName] = useState("");
-  const [recognizedWord, setRecognizedWord] = useState("");
-  const [hasInk, setHasInk] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const drawingRef = useRef(false);
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
   const [view, setView] = useState<"lists" | "creche" | "wardrobe">("lists");
 
@@ -269,45 +264,19 @@ export default function Home() {
     if (currentListId === id && updated?.length) setCurrentListId(updated[0].id);
   }
 
-  function draw(event: PointerEvent<HTMLCanvasElement>) {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (event.clientY - rect.top) * (canvas.height / rect.height);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    if (event.type === "pointerdown") {
-      drawingRef.current = true;
-      canvas.setPointerCapture(event.pointerId);
-      ctx.beginPath(); ctx.moveTo(x, y);
-    } else if (event.type === "pointermove" && drawingRef.current) {
-      ctx.lineWidth = 7; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111";
-      ctx.lineTo(x, y); ctx.stroke(); setHasInk(true);
-    } else drawingRef.current = false;
-  }
-
-  function clearWriting() {
-    const canvas = canvasRef.current;
-    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
-    setHasInk(false); setRecognizedWord("");
-  }
-
   return (
     <main className="stage">
       <section className="device" aria-label="Aperçu de l'écran SUPERVIE">
         {view === "creche" ? <CrechePage onLists={() => setView("lists")} onWardrobe={() => setView("wardrobe")} /> : view === "wardrobe" ? <WardrobePage onLists={() => setView("lists")} onCreche={() => setView("creche")} /> : <>
         <header className="topbar">
           <div>
-            <p className="eyebrow">SUPERVIE</p>
-            <button className="list-title" onClick={() => setShowLists(true)} aria-label="Changer ou gérer les listes">
-              <h1>{currentList?.name}</h1><span>⌄</span>
-            </button>
+            <p className="eyebrow">SUPERVIE · LISTE PARTAGÉE</p>
+            <h1>{currentList?.name}</h1>
           </div>
-          <div className="status" aria-label="Synchronisation active">
-            <span className="wifi">)))</span>
-            <span>21:32</span>
-          </div>
+          <button className="list-switch" onClick={() => setShowLists(true)} aria-label="Afficher toutes les listes">
+            <span aria-hidden="true">☰</span>
+            Toutes les listes
+          </button>
         </header>
 
         <div className="summary">
@@ -334,12 +303,8 @@ export default function Home() {
         </ul>
 
         <footer className="controls">
-          <button className="primary-action" onClick={() => setShowWrite(true)}>
-            <span className="pen-mark" aria-hidden="true">/</span>
-            Écrire
-          </button>
-          <div className="secondary-actions">
-            <button onClick={() => setShowAdd(true)}>+ Clavier</button>
+          <div className="quick-actions">
+            <button className="primary-action" onClick={() => setShowAdd(true)}>+ Ajouter un article</button>
             <button onClick={clearChecked}>Effacer cochés</button>
           </div>
           <p className={`sync-line ${syncState}`}><span /> {syncState === "loading" ? "Synchronisation…" : syncState === "error" ? "Hors connexion — réessayer" : "Synchronisé"}</p>
@@ -393,36 +358,6 @@ export default function Home() {
           </div>
         )}
 
-        {showWrite && (
-          <div className="write-screen" role="dialog" aria-modal="true" aria-label="Écriture au stylet">
-            <header>
-              <div>
-                <p className="eyebrow">ÉCRITURE AU STYLET</p>
-                <h2>Écris un article</h2>
-              </div>
-              <button onClick={() => setShowWrite(false)} aria-label="Fermer">×</button>
-            </header>
-            <div className="writing-zone">
-              {!hasInk && <span>Écris ici…</span>}
-              <canvas ref={canvasRef} width="900" height="900" onPointerDown={draw} onPointerMove={draw} onPointerUp={draw} onPointerCancel={draw} />
-            </div>
-            <div className="detected-word">
-              <span>Mot détecté</span>
-              <input value={recognizedWord} onChange={(event) => setRecognizedWord(event.target.value)} placeholder="—" aria-label="Mot détecté modifiable" />
-            </div>
-            <div className="write-actions">
-              <button onClick={clearWriting}>Effacer</button>
-              {!recognizedWord ? <button className="inverted" disabled={!hasInk} onClick={() => setRecognizedWord("Tomates")}>Reconnaître</button> :
-              <button
-                className="inverted"
-                onClick={async () => {
-                  await mutate({ action: "addItem", listId: currentListId, label: recognizedWord });
-                  clearWriting(); setShowWrite(false);
-                }}
-              >Ajouter →</button>}
-            </div>
-          </div>
-        )}
         </>}
       </section>
       <p className="prototype-note">Prototype portrait · LILYGO T5 4,7″ · 540 × 960</p>
