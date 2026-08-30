@@ -295,11 +295,11 @@ export default function Home() {
 
   return (
     <main className="stage">
-      <section className="device" aria-label="Aperçu de l'écran Liste Frigo">
+      <section className="device" aria-label="Aperçu de l'écran SUPERVIE">
         {view === "creche" ? <CrechePage onLists={() => setView("lists")} onWardrobe={() => setView("wardrobe")} /> : view === "wardrobe" ? <WardrobePage onLists={() => setView("lists")} onCreche={() => setView("creche")} /> : <>
         <header className="topbar">
           <div>
-            <p className="eyebrow">LISTE PARTAGÉE</p>
+            <p className="eyebrow">SUPERVIE</p>
             <button className="list-title" onClick={() => setShowLists(true)} aria-label="Changer ou gérer les listes">
               <h1>{currentList?.name}</h1><span>⌄</span>
             </button>

@@ -1,4 +1,4 @@
-# Liste Frigo
+# SUPERVIE
 
 Une liste de courses partagée conçue pour un écran e-paper tactile LILYGO T5 4,7 pouces fixé verticalement sur un réfrigérateur.
 
