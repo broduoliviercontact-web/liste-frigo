@@ -159,9 +159,16 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .full-list-header h2 { margin: 4px 0 8px; font-size: 40px; line-height: .95; letter-spacing: -.04em; }
 .full-list-header p:last-child { margin: 0; font-size: 15px; font-weight: 700; }
 .full-list-header > button { width: 46px; height: 46px; flex: 0 0 auto; border: 2px solid #111; background: transparent; font-size: 34px; line-height: 1; cursor: pointer; }
-.full-shopping-list { flex: 1; overflow-y: auto; list-style: none; margin: 0; padding: 0 26px 24px; }
-.full-shopping-list li { border-bottom: 2px solid #111; }
-.full-shopping-list .item-button { min-height: 78px; }
+.full-shopping-list { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; list-style: none; margin: 0; padding: 0 26px 24px; }
+.full-shopping-list li { flex: 1 1 0; min-height: 0; border-bottom: 2px solid #111; }
+.full-shopping-list .item-button { height: 100%; min-height: 0; }
+.full-shopping-list.dense .item-button { gap: 12px; padding-block: 5px; }
+.full-shopping-list.dense .item-emoji { font-size: 25px; }
+.full-shopping-list.dense .item-label { font-size: 23px; }
+.full-shopping-list.very-dense .item-button { gap: 9px; padding-block: 3px; }
+.full-shopping-list.very-dense .checkbox { width: 28px; height: 28px; border-width: 2px; font-size: 20px; }
+.full-shopping-list.very-dense .item-emoji { width: 28px; flex-basis: 28px; font-size: 21px; }
+.full-shopping-list.very-dense .item-label { font-size: 19px; }
 .panel { width: 100%; border: 3px solid #111; background: #f8f7f1; padding: 24px; }
 .panel label { display: block; margin: 18px 0 12px; font-size: 22px; font-weight: 800; line-height: 1.15; }
 .panel input { width: 100%; border: 3px solid #111; background: #fff; padding: 15px; font-size: 22px; outline: 0; }

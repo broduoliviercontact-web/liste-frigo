@@ -374,7 +374,7 @@ export default function Home() {
               </div>
               <button onClick={() => setShowFullList(false)} aria-label="Fermer la liste entière">×</button>
             </header>
-            <ul className="full-shopping-list" aria-label="Tous les articles">
+            <ul className={`full-shopping-list ${items.length > 14 ? "very-dense" : items.length > 10 ? "dense" : ""}`} aria-label="Tous les articles">
               {items.map((item) => (
                 <li key={item.id} className={item.checked ? "checked" : ""}>
                   <button
