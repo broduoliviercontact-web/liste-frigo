@@ -184,21 +184,31 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
   .stage { display: block; padding: 0; }
   .device { width: 100vw; height: 100dvh; max-height: none; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none; }
   .prototype-note { display: none; }
-  .topbar { min-height: 122px; padding: 22px 18px 18px; }
+  .topbar { min-height: 96px; padding: 16px 18px 12px; }
   .eyebrow { font-size: 10px; }
-  h1 { font-size: clamp(34px, 11vw, 46px); }
-  .list-switch { min-height: 42px; padding: 6px 8px; font-size: 9px; }
-  .summary { padding: 16px 18px 12px; }
+  h1 { font-size: clamp(32px, 10vw, 42px); }
+  .list-switch { min-height: 36px; padding: 5px 7px; font-size: 8px; }
+  .list-switch span { font-size: 15px; }
+  .summary { padding: 10px 18px 8px; }
   .summary > div { min-width: 0; gap: 7px; }
-  .summary strong { font-size: 34px; }
-  .summary span { font-size: 13px; }
-  .full-list-button { min-height: 40px; padding: 6px 8px; font-size: 9px; }
+  .summary strong { font-size: 30px; }
+  .summary span { font-size: 12px; }
+  .full-list-button { min-height: 34px; padding: 5px 7px; font-size: 8px; }
   .shopping-list { padding: 0 18px; }
-  .item-button { min-height: 70px; gap: 13px; }
-  .checkbox { width: 32px; height: 32px; }
-  .item-emoji { width: 32px; flex-basis: 32px; font-size: 27px; }
-  .item-label { font-size: clamp(21px, 6.3vw, 28px); }
-  .controls { padding: 12px 18px 16px; }
+  .item-button { min-height: 58px; gap: 11px; padding-block: 6px; }
+  .checkbox { width: 28px; height: 28px; border-width: 2px; font-size: 20px; }
+  .item-emoji { width: 28px; flex-basis: 28px; font-size: 24px; }
+  .item-label { font-size: clamp(20px, 5.8vw, 25px); }
+  .controls { padding: 8px 18px 10px; }
+  .controls button { min-height: 40px; }
+  .quick-actions button { font-size: 10px; }
+  .primary-action { font-size: 11px !important; }
+  .sync-line { margin: 8px 0 0; font-size: 9px; }
+  .sync-line span { width: 7px; height: 7px; }
+  .app-nav { gap: 6px; margin-top: 8px; }
+  .app-nav button { min-height: 40px; }
+  .app-nav.three button { font-size: 13px; }
+  .app-nav.three button span { font-size: 9px; }
   .full-list-header { padding: 24px 18px 18px; }
   .full-list-header h2 { font-size: clamp(35px, 10vw, 45px); }
   .full-shopping-list { padding: 0 18px 24px; }
