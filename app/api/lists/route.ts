@@ -2,7 +2,7 @@ import { asc, eq, inArray, and } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { shoppingItems, shoppingLists } from "../../../db/schema";
 
-async function readAll() {
+export async function readAll() {
   const db = await getDb();
   let lists = await db.select().from(shoppingLists).orderBy(asc(shoppingLists.createdAt));
   if (lists.length === 0) {
