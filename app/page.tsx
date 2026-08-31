@@ -241,6 +241,12 @@ export default function Home() {
     await mutate({ action: "clearChecked", listId: currentListId });
   }
 
+  async function deleteItem(id: number) {
+    const item = items.find((entry) => entry.id === id);
+    if (!item || !window.confirm(`Supprimer « ${item.label} » de cette liste ?`)) return;
+    await mutate({ action: "deleteItem", id });
+  }
+
   async function createList(event: FormEvent) {
     event.preventDefault();
     const name = newListName.trim();
@@ -293,17 +299,20 @@ export default function Home() {
         <ul className="shopping-list" aria-label="Articles">
           {items.map((item) => (
             <li key={item.id} className={item.checked ? "checked" : ""}>
-              <button
-                className="item-button"
-                onClick={() => toggle(item.id)}
-                aria-label={`${item.checked ? "Décocher" : "Cocher"} ${item.label}`}
-              >
-                <span className="checkbox" aria-hidden="true">
-                  {item.checked ? "✓" : ""}
-                </span>
-                <span className="item-emoji" aria-hidden="true">{emojiFor(item.label)}</span>
-                <span className="item-label">{item.label}</span>
-              </button>
+              <div className="item-row">
+                <button
+                  className="item-button"
+                  onClick={() => toggle(item.id)}
+                  aria-label={`${item.checked ? "Décocher" : "Cocher"} ${item.label}`}
+                >
+                  <span className="checkbox" aria-hidden="true">
+                    {item.checked ? "✓" : ""}
+                  </span>
+                  <span className="item-emoji" aria-hidden="true">{emojiFor(item.label)}</span>
+                  <span className="item-label">{item.label}</span>
+                </button>
+                <button className="delete-item" onClick={() => deleteItem(item.id)} aria-label={`Supprimer ${item.label}`}>×</button>
+              </div>
             </li>
           ))}
         </ul>
@@ -377,15 +386,18 @@ export default function Home() {
             <ul className={`full-shopping-list ${items.length > 14 ? "very-dense" : items.length > 10 ? "dense" : ""}`} aria-label="Tous les articles">
               {items.map((item) => (
                 <li key={item.id} className={item.checked ? "checked" : ""}>
-                  <button
-                    className="item-button"
-                    onClick={() => toggle(item.id)}
-                    aria-label={`${item.checked ? "Décocher" : "Cocher"} ${item.label}`}
-                  >
-                    <span className="checkbox" aria-hidden="true">{item.checked ? "✓" : ""}</span>
-                    <span className="item-emoji" aria-hidden="true">{emojiFor(item.label)}</span>
-                    <span className="item-label">{item.label}</span>
-                  </button>
+                  <div className="item-row">
+                    <button
+                      className="item-button"
+                      onClick={() => toggle(item.id)}
+                      aria-label={`${item.checked ? "Décocher" : "Cocher"} ${item.label}`}
+                    >
+                      <span className="checkbox" aria-hidden="true">{item.checked ? "✓" : ""}</span>
+                      <span className="item-emoji" aria-hidden="true">{emojiFor(item.label)}</span>
+                      <span className="item-label">{item.label}</span>
+                    </button>
+                    <button className="delete-item" onClick={() => deleteItem(item.id)} aria-label={`Supprimer ${item.label}`}>×</button>
+                  </div>
                 </li>
               ))}
             </ul>

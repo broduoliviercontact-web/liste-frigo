@@ -29,6 +29,7 @@ export async function POST(request: Request) {
       case "deleteList": if (body.id) await db.delete(shoppingLists).where(eq(shoppingLists.id, body.id)); break;
       case "addItem": { const label = body.label?.trim(); if (!body.listId || !label) return Response.json({ error: "Données manquantes" }, { status: 400 }); await db.insert(shoppingItems).values({ listId: body.listId, label }); break; }
       case "toggleItem": if (body.id) await db.update(shoppingItems).set({ checked: Boolean(body.checked) }).where(eq(shoppingItems.id, body.id)); break;
+      case "deleteItem": if (body.id) await db.delete(shoppingItems).where(eq(shoppingItems.id, body.id)); break;
       case "clearChecked": if (body.listId) await db.delete(shoppingItems).where(and(eq(shoppingItems.listId, body.listId), eq(shoppingItems.checked, true))); break;
       default: return Response.json({ error: "Action inconnue" }, { status: 400 });
     }
