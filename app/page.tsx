@@ -167,6 +167,15 @@ function weatherIcon(weatherCode = 3, isDay = true) {
   return isDay ? "☀" : "☾";
 }
 
+function weatherDescription(weatherCode = 3) {
+  if (weatherCode >= 95) return "Orages";
+  if (weatherCode >= 61) return "Pluie";
+  if (weatherCode === 45 || weatherCode === 48) return "Brouillard";
+  if (weatherCode === 3) return "Nuages dominants";
+  if (weatherCode === 2) return "Eclaircies";
+  return "Ciel clair";
+}
+
 function hourLabel(time: string) {
   return new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "numeric", hourCycle: "h23" }).format(new Date(time));
 }
@@ -176,19 +185,25 @@ function MeteoPage({ onLists, onCreche, onMeals }: { onLists: () => void; onCrec
 
   const current = weather?.current;
   const today = weather?.today;
-  const hourly = weather?.hourly ?? [];
+  const hourly = (weather?.hourly ?? []).slice(0, 6);
   return <div className="epaper-weather-page">
     <header className="epaper-weather-header">
-      <div><p className="eyebrow">MÉTÉO SUPERVIE</p><h1>{weather?.location ?? "Pantin"}</h1></div>
-      <div className="epaper-weather-current"><strong>{current ? `${current.temperature}°` : "--"}</strong><span>{weatherIcon(current?.weatherCode, current?.isDay)}</span></div>
+      <p className="eyebrow">MÉTÉO SUPERVIE</p>
+      <h1>{weather?.location ?? "Pantin"}</h1>
     </header>
-    <section className="epaper-weather-summary">
-      <p className="eyebrow">AUJOURD&apos;HUI</p>
-      <strong>{today ? `${today.min}° · ${today.max}°` : "Prévisions indisponibles"}</strong>
-      <span>{weather?.status === "ready" ? "Synchronisé avec l'e-paper" : "Météo momentanément indisponible"}</span>
+    <section className="weather-hero" aria-label="Météo actuelle">
+      <div><p className="eyebrow">MAINTENANT</p><strong>{current ? `${current.temperature}°` : "--"}</strong></div>
+      <span aria-hidden="true">{weatherIcon(current?.weatherCode, current?.isDay)}</span>
+    </section>
+    <section className="weather-condition">
+      <strong>{weatherDescription(current?.weatherCode)}</strong>
+      <p>{today ? `Max ${today.max}°   Min ${today.min}°` : "Prévisions indisponibles"}</p>
     </section>
     <section className="epaper-weather-hours" aria-label="Prévisions heure par heure">
-      {hourly.map((hour) => <article key={hour.time}><time>{hourLabel(hour.time)} h</time><span>{weatherIcon(hour.weatherCode, hour.isDay)}</span><strong>{hour.temperature}°</strong></article>)}
+      <p className="eyebrow">AUJOURD&apos;HUI</p>
+      <div className="weather-hours-row">
+        {hourly.map((hour) => <article key={hour.time}><time>{hourLabel(hour.time)} h</time><span>{weatherIcon(hour.weatherCode, hour.isDay)}</span><strong>{hour.temperature}°</strong></article>)}
+      </div>
     </section>
     {weather?.tomorrow && <section className="epaper-weather-tomorrow"><div><p className="eyebrow">DEMAIN</p><strong>{weather.tomorrow.min}° · {weather.tomorrow.max}°</strong></div><span>{weatherIcon(weather.tomorrow.weatherCode)}</span></section>}
     <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button className="active">☁ <span>Météo</span></button><button onClick={onMeals}>🍽 <span>Repas</span></button></nav>

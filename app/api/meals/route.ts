@@ -37,15 +37,29 @@ async function ensureMealSchema() {
   return schemaReady;
 }
 
+export async function readWeekMeals() {
+  await ensureMealSchema();
+  const { monday, sunday } = weekBounds();
+  const db = await getDb();
+  const meals = await db.select().from(mealPlans)
+    .where(and(gte(mealPlans.date, monday), lte(mealPlans.date, sunday)))
+    .orderBy(asc(mealPlans.date), asc(mealPlans.moment));
+  const mondayNoon = Date.parse(`${monday}T12:00:00Z`);
+  return {
+    monday,
+    sunday,
+    meals: meals.map((meal) => ({
+      date: meal.date,
+      dayIndex: Math.round((Date.parse(`${meal.date}T12:00:00Z`) - mondayNoon) / 86_400_000),
+      moment: meal.moment,
+      label: meal.label,
+    })),
+  };
+}
+
 export async function GET() {
   try {
-    await ensureMealSchema();
-    const { monday, sunday } = weekBounds();
-    const db = await getDb();
-    const meals = await db.select().from(mealPlans)
-      .where(and(gte(mealPlans.date, monday), lte(mealPlans.date, sunday)))
-      .orderBy(asc(mealPlans.date), asc(mealPlans.moment));
-    return Response.json({ monday, sunday, meals });
+    return Response.json(await readWeekMeals());
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Erreur repas" }, { status: 500 });
   }

@@ -154,20 +154,24 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .creche-page > .app-nav { flex: 0 0 auto; margin-top: auto; }
 
 .epaper-weather-page { min-height: 0; height: 100%; display: flex; flex-direction: column; padding: 24px 26px 18px; }
-.epaper-weather-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 16px; border-bottom: 3px solid #111; }
-.epaper-weather-current { display: flex; align-items: center; gap: 9px; }
-.epaper-weather-current strong { font-size: 44px; line-height: .9; }
-.epaper-weather-current span { font-size: 42px; filter: grayscale(1); }
-.epaper-weather-summary { padding: 16px 0; border-bottom: 3px solid #111; }
-.epaper-weather-summary p { margin: 0 0 6px; }
-.epaper-weather-summary strong { display: block; font-size: 28px; }
-.epaper-weather-summary span { display: block; margin-top: 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
-.epaper-weather-hours { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 16px 0; overflow-y: auto; }
-.epaper-weather-hours article { min-height: 104px; border: 2px solid #111; display: grid; place-items: center; align-content: center; gap: 5px; }
-.epaper-weather-hours time { font-size: 11px; font-weight: 900; }
-.epaper-weather-hours span { font-size: 28px; filter: grayscale(1); }
-.epaper-weather-hours strong { font-size: 20px; }
-.epaper-weather-tomorrow { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-top: 3px solid #111; }
+.epaper-weather-header { padding-bottom: 14px; border-bottom: 3px solid #111; }
+.epaper-weather-header p { margin: 0 0 5px; }
+.epaper-weather-header h1 { margin: 0; font-size: 42px; line-height: 1; }
+.weather-hero { display: flex; align-items: center; justify-content: space-between; padding: 18px 4px 10px; }
+.weather-hero p { margin: 0 0 5px; }
+.weather-hero strong { font-size: 74px; line-height: .86; }
+.weather-hero > span { font-size: 72px; line-height: 1; filter: grayscale(1); }
+.weather-condition { padding: 0 0 17px; border-bottom: 3px solid #111; }
+.weather-condition strong { display: block; font-size: 25px; line-height: 1.1; }
+.weather-condition p { margin: 8px 0 0; font-size: 18px; font-weight: 800; }
+.epaper-weather-hours { padding: 15px 0 14px; border-bottom: 3px solid #111; }
+.epaper-weather-hours > p { margin: 0 0 11px; }
+.weather-hours-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.epaper-weather-hours article { display: grid; place-items: center; align-content: center; gap: 8px; min-width: 0; }
+.epaper-weather-hours time { font-size: 11px; font-weight: 900; white-space: nowrap; }
+.epaper-weather-hours span { font-size: 28px; line-height: 1; filter: grayscale(1); }
+.epaper-weather-hours strong { font-size: 18px; }
+.epaper-weather-tomorrow { display: flex; justify-content: space-between; align-items: center; padding: 13px 0; }
 .epaper-weather-tomorrow p { margin: 0 0 5px; }
 .epaper-weather-tomorrow strong { font-size: 26px; }
 .epaper-weather-tomorrow > span { font-size: 40px; filter: grayscale(1); }
@@ -305,13 +309,19 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
   .full-list-header h2 { font-size: clamp(35px, 10vw, 45px); }
   .full-shopping-list { padding: 0 18px 24px; }
   .epaper-weather-page { padding: 16px 18px 10px; }
-  .epaper-weather-current strong { font-size: 36px; }
-  .epaper-weather-current span { font-size: 34px; }
-  .epaper-weather-summary { padding: 10px 0; }
-  .epaper-weather-summary strong { font-size: 23px; }
-  .epaper-weather-hours { gap: 6px; padding: 10px 0; }
-  .epaper-weather-hours article { min-height: 76px; }
-  .epaper-weather-hours span { font-size: 22px; }
+  .epaper-weather-header h1 { font-size: 36px; }
+  .weather-hero { padding: 13px 2px 8px; }
+  .weather-hero strong { font-size: 60px; }
+  .weather-hero > span { font-size: 60px; }
+  .weather-condition { padding-bottom: 12px; }
+  .weather-condition strong { font-size: 21px; }
+  .weather-condition p { margin-top: 6px; font-size: 16px; }
+  .epaper-weather-hours { padding: 11px 0; }
+  .epaper-weather-hours > p { margin-bottom: 8px; }
+  .epaper-weather-hours article { gap: 5px; }
+  .epaper-weather-hours span { font-size: 21px; }
+  .epaper-weather-hours strong { font-size: 16px; }
+  .epaper-weather-hours time { font-size: 9px; }
   .epaper-weather-tomorrow { padding: 9px 0; }
   .epaper-weather-tomorrow strong { font-size: 22px; }
 }
