@@ -81,7 +81,7 @@ export async function readPantinWeather(): Promise<EpaperWeather> {
     cacheExpiresAt = Date.now() + WEATHER_CACHE_MS;
     return weather;
   } catch (error) {
-    console.error("E-paper weather unavailable", error);
+    console.error(`E-paper weather unavailable: ${error instanceof Error ? error.message : String(error)}`);
     return { status: "unavailable", location: "Pantin", timezone: "Europe/Paris" };
   }
 }
