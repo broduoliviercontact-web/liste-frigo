@@ -219,6 +219,7 @@ function MealPlannerPage({ onLists, onCreche, onWeather }: { onLists: () => void
   const [selectedDate, setSelectedDate] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [state, setState] = useState<"loading" | "ready" | "saving" | "error">("loading");
+  const [showWeeklyView, setShowWeeklyView] = useState(false);
 
   const loadMeals = useCallback(async () => {
     try {
@@ -263,7 +264,7 @@ function MealPlannerPage({ onLists, onCreche, onWeather }: { onLists: () => void
   return <div className="meals-page">
     <header className="meals-header">
       <div><p className="eyebrow">SUPERVIE · REPAS</p><h1>Cette semaine</h1></div>
-      <span>{state === "saving" ? "Enregistrement" : "MENU PARTAGÉ"}</span>
+      <button className="weekly-view-button" onClick={() => setShowWeeklyView(true)}>Voir la semaine</button>
     </header>
     <section className="week-strip" aria-label="Jours de la semaine">
       {days.map((date) => <button key={date} className={date === selectedDay ? "active" : ""} onClick={() => setSelectedDate(date)}>
@@ -287,6 +288,16 @@ function MealPlannerPage({ onLists, onCreche, onWeather }: { onLists: () => void
     </section>
     <p className={`meal-status ${state}`}><span /> {state === "error" ? "Synchronisation indisponible" : state === "saving" ? "Enregistrement…" : "Repas synchronisés"}</p>
     <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button><button className="active">🍽 <span>Repas</span></button></nav>
+    {showWeeklyView && <section className="weekly-meals-screen" aria-label="Tous les repas de la semaine">
+      <header className="weekly-meals-header"><div><p className="eyebrow">SUPERVIE · MENU PARTAGÉ</p><h2>Toute la semaine</h2></div><button onClick={() => setShowWeeklyView(false)} aria-label="Fermer la semaine">×</button></header>
+      <div className="weekly-meals-list">
+        {days.map((date) => <article key={date}>
+          <h3>{mealDayLabel(date)}</h3>
+          <p><span>☀ Midi</span><strong>{mealFor(date, "midi") || "À prévoir"}</strong></p>
+          <p><span>☾ Soir</span><strong>{mealFor(date, "soir") || "À prévoir"}</strong></p>
+        </article>)}
+      </div>
+    </section>}
   </div>;
 }
 
