@@ -1,11 +1,12 @@
-const PANTIN_LATITUDE = 48.8966;
-const PANTIN_LONGITUDE = 2.4017;
+// Home location: 11 avenue du Colonel Fabien, Pantin.
+const PANTIN_LATITUDE = 48.8924;
+const PANTIN_LONGITUDE = 2.4248;
 const WEATHER_CACHE_MS = 15 * 60 * 1000;
 
 type MetNoPoint = {
   time: string;
   data?: {
-    instant?: { details?: { air_temperature?: number } };
+    instant?: { details?: { air_temperature?: number; cloud_area_fraction?: number } };
     next_1_hours?: { summary?: { symbol_code?: string } };
     next_6_hours?: { summary?: { symbol_code?: string } };
   };
@@ -51,6 +52,14 @@ function symbolFor(point: MetNoPoint) {
   return point.data?.next_1_hours?.summary?.symbol_code ?? point.data?.next_6_hours?.summary?.symbol_code ?? "cloudy";
 }
 
+function currentWeatherCode(point: MetNoPoint) {
+  const cloudCover = point.data?.instant?.details?.cloud_area_fraction;
+  if (typeof cloudCover !== "number") return weatherCode(symbolFor(point));
+  if (cloudCover < 20) return 0;
+  if (cloudCover < 70) return 2;
+  return 3;
+}
+
 export async function readPantinWeather(): Promise<EpaperWeather> {
   if (cachedWeather && Date.now() < cacheExpiresAt) return cachedWeather;
 
@@ -88,7 +97,9 @@ export async function readPantinWeather(): Promise<EpaperWeather> {
       location: "Pantin",
       timezone: "Europe/Paris",
       updatedAt: data.properties?.meta?.updated_at ?? new Date().toISOString(),
-      current: { time: current.time, temperature: Math.round(currentTemperature), weatherCode: weatherCode(todaySymbol), isDay: todaySymbol.endsWith("_day") },
+      // MET symbols describe a future period. The current screen should show
+      // the instantaneous sky state rather than a possible shower in the next hour.
+      current: { time: current.time, temperature: Math.round(currentTemperature), weatherCode: currentWeatherCode(current), isDay: todaySymbol.endsWith("_day") },
       today: todayTemperatures.length ? { min: Math.round(Math.min(...todayTemperatures)), max: Math.round(Math.max(...todayTemperatures)), weatherCode: weatherCode(todaySymbol) } : undefined,
       tomorrow: tomorrowTemperatures.length ? { date: tomorrowDate, min: Math.round(Math.min(...tomorrowTemperatures)), max: Math.round(Math.max(...tomorrowTemperatures)), weatherCode: weatherCode(symbolFor(tomorrowPoint)) } : undefined,
       hourly,
