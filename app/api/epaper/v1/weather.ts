@@ -1,4 +1,4 @@
-// Home location: 11 avenue du Colonel Fabien, Pantin.
+// Approximate Pantin location used for local weather forecasts.
 const PANTIN_LATITUDE = 48.8924;
 const PANTIN_LONGITUDE = 2.4248;
 const WEATHER_CACHE_MS = 2 * 60 * 1000;

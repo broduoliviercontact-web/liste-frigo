@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { mealPlans } from "../../../db/schema";
+import { requireSupervieAccess } from "../../access";
 
 type MealMoment = "midi" | "soir";
 
@@ -26,7 +27,7 @@ let schemaReady: Promise<void> | null = null;
 
 async function ensureMealSchema() {
   if (schemaReady) return schemaReady;
-  schemaReady = (async () => {
+  const setup = (async () => {
     const { env } = await import("cloudflare:workers");
     await env.DB.batch([
       env.DB.prepare("CREATE TABLE IF NOT EXISTS meal_plans (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, moment TEXT NOT NULL, label TEXT NOT NULL, updated_at INTEGER NOT NULL)"),
@@ -34,7 +35,13 @@ async function ensureMealSchema() {
       env.DB.prepare("CREATE INDEX IF NOT EXISTS meal_plans_date_idx ON meal_plans (date)"),
     ]);
   })();
-  return schemaReady;
+  schemaReady = setup;
+  try {
+    await setup;
+  } catch (error) {
+    schemaReady = null;
+    throw error;
+  }
 }
 
 export async function readWeekMeals() {
@@ -57,8 +64,10 @@ export async function readWeekMeals() {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const denied = await requireSupervieAccess(request);
+    if (denied) return denied;
     return Response.json(await readWeekMeals());
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Erreur repas" }, { status: 500 });
@@ -67,6 +76,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const denied = await requireSupervieAccess(request);
+    if (denied) return denied;
     await ensureMealSchema();
     const body = await request.json() as { date?: string; moment?: MealMoment; label?: string };
     const date = body.date ?? "";
@@ -83,7 +94,7 @@ export async function POST(request: Request) {
       await db.insert(mealPlans).values({ date, moment, label: label.slice(0, 100), updatedAt: new Date() })
         .onConflictDoUpdate({ target: [mealPlans.date, mealPlans.moment], set: { label: label.slice(0, 100), updatedAt: new Date() } });
     }
-    return GET();
+    return Response.json(await readWeekMeals());
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Erreur repas" }, { status: 500 });
   }

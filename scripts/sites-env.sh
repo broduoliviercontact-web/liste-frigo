@@ -49,4 +49,7 @@ if [[ "$#" -eq 0 ]]; then
 fi
 
 cd "${project_root}"
+if [[ "$1" != */* && -x "${project_root}/node_modules/.bin/$1" ]]; then
+  exec "${project_root}/node_modules/.bin/$1" "${@:2}"
+fi
 exec "$@"

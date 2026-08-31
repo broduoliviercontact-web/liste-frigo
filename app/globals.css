@@ -20,6 +20,15 @@ button { color: inherit; }
   padding: 28px;
 }
 
+.access-stage { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.access-panel { width: min(420px, 100%); border: 3px solid #111; background: #f8f7f1; padding: 28px; box-shadow: 12px 12px 0 rgb(0 0 0 / 14%); }
+.access-panel h1 { margin-bottom: 28px; }
+.access-panel form { display: grid; gap: 10px; }
+.access-panel label { font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.access-panel input { min-height: 48px; border: 2px solid #111; background: #fff; padding: 8px 10px; }
+.access-panel button { min-height: 46px; border: 2px solid #111; background: #111; color: #fff; font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.access-error { margin: 14px 0 0; font-size: 12px; font-weight: 800; }
+
 .device {
   position: relative;
   display: flex;

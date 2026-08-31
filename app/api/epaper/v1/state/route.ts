@@ -1,9 +1,12 @@
 import { readAll } from "../../../lists/route";
 import { readWeekMeals } from "../../../meals/route";
 import { readPantinWeather } from "../weather";
+import { requireSupervieAccess } from "../../../../access";
 
 export async function GET(request: Request) {
   try {
+    const denied = await requireSupervieAccess(request);
+    if (denied) return denied;
     const [lists, weather, meals] = await Promise.all([readAll(), readPantinWeather(), readWeekMeals()]);
     const requestedId = Number(new URL(request.url).searchParams.get("listId"));
     const selectedIndex = lists.findIndex((list) => list.id === requestedId);

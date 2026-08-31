@@ -1,6 +1,7 @@
 import { asc, eq, inArray, and } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { shoppingItems, shoppingLists } from "../../../db/schema";
+import { requireSupervieAccess } from "../../access";
 
 export async function readAll() {
   const db = await getDb();
@@ -14,25 +15,47 @@ export async function readAll() {
   return lists.map((list) => ({ ...list, items: items.filter((item) => item.listId === list.id) }));
 }
 
-export async function GET() {
-  try { return Response.json({ lists: await readAll() }); }
+export async function GET(request: Request) {
+  try {
+    const denied = await requireSupervieAccess(request);
+    if (denied) return denied;
+    return Response.json({ lists: await readAll() });
+  }
   catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Erreur base de données" }, { status: 500 }); }
 }
 
 export async function POST(request: Request) {
   try {
+    const denied = await requireSupervieAccess(request);
+    if (denied) return denied;
     const body = await request.json() as { action?: string; id?: number; listId?: number; name?: string; label?: string; labels?: string[]; checked?: boolean };
     const db = await getDb();
     switch (body.action) {
-      case "createList": { const name = body.name?.trim(); if (!name) return Response.json({ error: "Nom requis" }, { status: 400 }); await db.insert(shoppingLists).values({ name }); break; }
-      case "renameList": { const name = body.name?.trim(); if (!body.id || !name) return Response.json({ error: "Données manquantes" }, { status: 400 }); await db.update(shoppingLists).set({ name }).where(eq(shoppingLists.id, body.id)); break; }
+      case "createList": {
+        const name = body.name?.trim().slice(0, 80);
+        if (!name) return Response.json({ error: "Nom requis" }, { status: 400 });
+        const count = await db.$count(shoppingLists);
+        if (count >= 40) return Response.json({ error: "40 listes maximum" }, { status: 400 });
+        await db.insert(shoppingLists).values({ name });
+        break;
+      }
+      case "renameList": { const name = body.name?.trim().slice(0, 80); if (!body.id || !name) return Response.json({ error: "Données manquantes" }, { status: 400 }); await db.update(shoppingLists).set({ name }).where(eq(shoppingLists.id, body.id)); break; }
       case "deleteList": if (body.id) await db.delete(shoppingLists).where(eq(shoppingLists.id, body.id)); break;
-      case "addItem": { const label = body.label?.trim(); if (!body.listId || !label) return Response.json({ error: "Données manquantes" }, { status: 400 }); await db.insert(shoppingItems).values({ listId: body.listId, label }); break; }
+      case "addItem": {
+        const label = body.label?.trim().slice(0, 160);
+        if (!body.listId || !label) return Response.json({ error: "Données manquantes" }, { status: 400 });
+        const count = await db.$count(shoppingItems, eq(shoppingItems.listId, body.listId));
+        if (count >= 200) return Response.json({ error: "200 articles maximum par liste" }, { status: 400 });
+        await db.insert(shoppingItems).values({ listId: body.listId, label });
+        break;
+      }
       case "addItems": {
         const labels = Array.isArray(body.labels)
           ? body.labels.map((label) => label.trim()).filter(Boolean).slice(0, 80)
           : [];
         if (!body.listId || labels.length === 0) return Response.json({ error: "Données manquantes" }, { status: 400 });
+        const count = await db.$count(shoppingItems, eq(shoppingItems.listId, body.listId));
+        if (count + labels.length > 200) return Response.json({ error: "200 articles maximum par liste" }, { status: 400 });
         await db.batch(labels.map((label) => db.insert(shoppingItems).values({ listId: body.listId!, label: label.slice(0, 160) })));
         break;
       }
