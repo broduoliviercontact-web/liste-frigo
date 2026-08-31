@@ -186,7 +186,7 @@ export default function Home() {
   const [showAdd, setShowAdd] = useState(false);
   const [showLists, setShowLists] = useState(false);
   const [showFullList, setShowFullList] = useState(false);
-  const [newItem, setNewItem] = useState("");
+  const [newItemsText, setNewItemsText] = useState("");
   const [newListName, setNewListName] = useState("");
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
   const [view, setView] = useState<"lists" | "creche" | "wardrobe">("lists");
@@ -228,13 +228,18 @@ export default function Home() {
     if (item) await mutate({ action: "toggleItem", id, checked: !item.checked });
   }
 
-  async function addItem(event: FormEvent) {
+  async function addItems(event: FormEvent) {
     event.preventDefault();
-    const label = newItem.trim();
-    if (!label) return;
-    await mutate({ action: "addItem", listId: currentListId, label });
-    setNewItem("");
-    setShowAdd(false);
+    const labels = newItemsText
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^\s*(?:[-*•▪◦]|\d+[.)]|\[[ xX]?\])\s*/, "").trim())
+      .filter(Boolean);
+    if (labels.length === 0) return;
+    const updated = await mutate({ action: "addItems", listId: currentListId, labels });
+    if (updated) {
+      setNewItemsText("");
+      setShowAdd(false);
+    }
   }
 
   async function clearChecked() {
@@ -328,19 +333,19 @@ export default function Home() {
 
         {showAdd && (
           <div className="overlay" role="dialog" aria-modal="true" aria-label="Ajouter un article">
-            <form className="panel" onSubmit={addItem}>
-              <p className="eyebrow">NOUVEL ARTICLE</p>
-              <label htmlFor="new-item">Qu&apos;est-ce qu&apos;il faut acheter&nbsp;?</label>
-              <input
-                id="new-item"
-                value={newItem}
-                onChange={(event) => setNewItem(event.target.value)}
+            <form className="panel" onSubmit={addItems}>
+              <p className="eyebrow">AJOUTER DES ARTICLES</p>
+              <label htmlFor="new-items">Colle une entrée par ligne</label>
+              <textarea
+                id="new-items"
+                value={newItemsText}
+                onChange={(event) => setNewItemsText(event.target.value)}
                 autoFocus
-                placeholder="Ex. Tomates"
+                placeholder={"Tomates\nLait\nCouches"}
               />
               <div className="panel-actions">
                 <button type="button" onClick={() => setShowAdd(false)}>Annuler</button>
-                <button type="submit" className="inverted">Ajouter</button>
+                <button type="submit" className="inverted">Ajouter la liste</button>
               </div>
             </form>
           </div>

@@ -21,13 +21,21 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { action?: string; id?: number; listId?: number; name?: string; label?: string; checked?: boolean };
+    const body = await request.json() as { action?: string; id?: number; listId?: number; name?: string; label?: string; labels?: string[]; checked?: boolean };
     const db = await getDb();
     switch (body.action) {
       case "createList": { const name = body.name?.trim(); if (!name) return Response.json({ error: "Nom requis" }, { status: 400 }); await db.insert(shoppingLists).values({ name }); break; }
       case "renameList": { const name = body.name?.trim(); if (!body.id || !name) return Response.json({ error: "Données manquantes" }, { status: 400 }); await db.update(shoppingLists).set({ name }).where(eq(shoppingLists.id, body.id)); break; }
       case "deleteList": if (body.id) await db.delete(shoppingLists).where(eq(shoppingLists.id, body.id)); break;
       case "addItem": { const label = body.label?.trim(); if (!body.listId || !label) return Response.json({ error: "Données manquantes" }, { status: 400 }); await db.insert(shoppingItems).values({ listId: body.listId, label }); break; }
+      case "addItems": {
+        const labels = Array.isArray(body.labels)
+          ? body.labels.map((label) => label.trim()).filter(Boolean).slice(0, 80)
+          : [];
+        if (!body.listId || labels.length === 0) return Response.json({ error: "Données manquantes" }, { status: 400 });
+        await db.batch(labels.map((label) => db.insert(shoppingItems).values({ listId: body.listId!, label: label.slice(0, 160) })));
+        break;
+      }
       case "toggleItem": if (body.id) await db.update(shoppingItems).set({ checked: Boolean(body.checked) }).where(eq(shoppingItems.id, body.id)); break;
       case "deleteItem": if (body.id) await db.delete(shoppingItems).where(eq(shoppingItems.id, body.id)); break;
       case "clearChecked": if (body.listId) await db.delete(shoppingItems).where(and(eq(shoppingItems.listId, body.listId), eq(shoppingItems.checked, true))); break;
