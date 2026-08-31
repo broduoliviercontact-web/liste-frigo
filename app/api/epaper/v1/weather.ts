@@ -17,6 +17,7 @@ export type EpaperWeather = {
   today?: { min: number; max: number; weatherCode: number };
   tomorrow?: { date: string; min: number; max: number; weatherCode: number };
   hourly?: Array<{ time: string; temperature: number; weatherCode: number; isDay: boolean }>;
+  error?: string;
 };
 
 let cachedWeather: EpaperWeather | null = null;
@@ -81,7 +82,8 @@ export async function readPantinWeather(): Promise<EpaperWeather> {
     cacheExpiresAt = Date.now() + WEATHER_CACHE_MS;
     return weather;
   } catch (error) {
-    console.error(`E-paper weather unavailable: ${error instanceof Error ? error.message : String(error)}`);
-    return { status: "unavailable", location: "Pantin", timezone: "Europe/Paris" };
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`E-paper weather unavailable: ${message}`);
+    return { status: "unavailable", location: "Pantin", timezone: "Europe/Paris", error: message };
   }
 }
