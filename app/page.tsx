@@ -94,7 +94,7 @@ const weatherScenarios: Record<WeatherMode, {
   froid: { label: "Froid", icon: "❄", now: "3°", morning: "2,4°C", evening: "6,8°C", rain: "10% pluie", image: "/avatars/cesar-froid-epaper.png", clothes: ["Manteau chaud", "Bonnet + écharpe", "Pantalon + bottines"], feeling: "Très froid", advice: "Bien couvrir les extrémités" },
 };
 
-function CrechePage({ onLists, onWardrobe }: { onLists: () => void; onWardrobe: () => void }) {
+function CrechePage({ onLists }: { onLists: () => void }) {
   const [mode, setMode] = useState<WeatherMode>("canicule");
   const weather = weatherScenarios[mode];
   return <div className="creche-page">
@@ -117,7 +117,7 @@ function CrechePage({ onLists, onWardrobe }: { onLists: () => void; onWardrobe: 
       <div className="sun-advice"><span>{weather.icon}</span><p><strong>{weather.feeling}</strong><br />{weather.advice}</p></div>
     </section>
     <p className="weather-update"><span /> Brief du 12 août · démonstration</p>
-    <nav className="app-nav three" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button><button onClick={onWardrobe}>▣ <span>Tenues</span></button></nav>
+    <nav className="app-nav" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button></nav>
   </div>;
 }
 
@@ -189,7 +189,7 @@ export default function Home() {
   const [newItemsText, setNewItemsText] = useState("");
   const [newListName, setNewListName] = useState("");
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
-  const [view, setView] = useState<"lists" | "creche" | "wardrobe">("lists");
+  const [view, setView] = useState<"lists" | "creche">("lists");
 
   const loadLists = useCallback(async (quiet = false) => {
     if (!quiet) setSyncState("loading");
@@ -279,7 +279,7 @@ export default function Home() {
   return (
     <main className="stage">
       <section className="device" aria-label="Aperçu de l'écran SUPERVIE">
-        {view === "creche" ? <CrechePage onLists={() => setView("lists")} onWardrobe={() => setView("wardrobe")} /> : view === "wardrobe" ? <WardrobePage onLists={() => setView("lists")} onCreche={() => setView("creche")} /> : <>
+        {view === "creche" ? <CrechePage onLists={() => setView("lists")} /> : <>
         <header className="topbar">
           <div>
             <p className="eyebrow">SUPERVIE · LISTE PARTAGÉE</p>
@@ -328,7 +328,7 @@ export default function Home() {
             <button onClick={clearChecked}>Effacer cochés</button>
           </div>
           <p className={`sync-line ${syncState}`}><span /> {syncState === "loading" ? "Synchronisation…" : syncState === "error" ? "Hors connexion — réessayer" : "Synchronisé"}</p>
-          <nav className="app-nav three" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button><button onClick={() => setView("wardrobe")}>▣ <span>Tenues</span></button></nav>
+          <nav className="app-nav" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button></nav>
         </footer>
 
         {showAdd && (
