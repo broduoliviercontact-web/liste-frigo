@@ -6,7 +6,7 @@
 constexpr int32_t LOGICAL_WIDTH = EPD_HEIGHT;   // 540
 constexpr int32_t LOGICAL_HEIGHT = EPD_WIDTH;   // 960
 constexpr size_t FRAMEBUFFER_BYTES = EPD_WIDTH * EPD_HEIGHT / 2;
-constexpr int8_t NAV_TAB_COUNT = 6;
+constexpr int8_t NAV_TAB_COUNT = 4;
 constexpr int8_t LIST_ITEM_COUNT = 24;
 constexpr int8_t VISIBLE_LIST_ROWS = 6;
 constexpr int32_t LIST_TOP_Y = 220;
@@ -17,14 +17,14 @@ constexpr int8_t LIST_COUNT_MAX = 8;
 constexpr int8_t WEATHER_HOUR_COUNT = 12;
 constexpr int8_t WEATHER_LOCATION_MAX = 16;
 constexpr int8_t WEATHER_UPDATED_AT_MAX = 32;
+constexpr int8_t WEEK_MEAL_COUNT = 14;
+constexpr int8_t MEAL_LABEL_MAX = 32;
 
 enum NavTabId : int8_t {
     TAB_LISTES = 0,
     TAB_METEO = 1,
     TAB_CRECHE = 2,
-    TAB_TENUES = 3,
-    TAB_VELIB = 4,
-    TAB_TRANSP = 5,
+    TAB_REPAS = 3,
     TAB_NONE = -1,
 };
 
@@ -89,6 +89,18 @@ struct WeatherState {
     CrecheForecast return_forecast;
 };
 
+struct WeekMeal {
+    uint8_t day_index;
+    bool lunch;
+    char label[MEAL_LABEL_MAX];
+};
+
+struct MealWeekState {
+    bool available;
+    WeekMeal meals[WEEK_MEAL_COUNT];
+    int8_t meal_count;
+};
+
 struct TouchEvent {
     int16_t physical_x;
     int16_t physical_y;
@@ -124,12 +136,8 @@ inline const char *navAsciiName(NavTabId tab)
         return "Meteo";
     case TAB_CRECHE:
         return "Creche";
-    case TAB_TENUES:
-        return "Tenues";
-    case TAB_VELIB:
-        return "Velib";
-    case TAB_TRANSP:
-        return "Transp";
+    case TAB_REPAS:
+        return "Repas";
     default:
         return "aucun";
     }
@@ -144,12 +152,8 @@ inline const char *navSerialName(NavTabId tab)
         return "Météo";
     case TAB_CRECHE:
         return "Crèche";
-    case TAB_TENUES:
-        return "Tenues";
-    case TAB_VELIB:
-        return "Vélib";
-    case TAB_TRANSP:
-        return "Transp.";
+    case TAB_REPAS:
+        return "Repas";
     default:
         return "aucun";
     }
@@ -164,12 +168,8 @@ inline const char *navPageTitle(NavTabId tab)
         return "METEO";
     case TAB_CRECHE:
         return "CRECHE";
-    case TAB_TENUES:
-        return "TENUES";
-    case TAB_VELIB:
-        return "VELIB";
-    case TAB_TRANSP:
-        return "TRANSP";
+    case TAB_REPAS:
+        return "REPAS";
     default:
         return "LISTES";
     }

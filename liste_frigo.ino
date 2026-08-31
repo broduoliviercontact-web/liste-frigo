@@ -117,6 +117,7 @@ ListPageState list_state = {
     0,
 };
 WeatherState weather_state = {};
+MealWeekState meal_week_state = {};
 
 int8_t daysInMonth(int year, int month)
 {
@@ -306,6 +307,16 @@ bool sameWeatherState(const WeatherState &a, const WeatherState &b)
     return true;
 }
 
+bool sameMealWeekState(const MealWeekState &a, const MealWeekState &b)
+{
+    if (a.available != b.available || a.meal_count != b.meal_count) return false;
+    for (int8_t i = 0; i < a.meal_count; ++i) {
+        if (a.meals[i].day_index != b.meals[i].day_index || a.meals[i].lunch != b.meals[i].lunch ||
+            strcmp(a.meals[i].label, b.meals[i].label) != 0) return false;
+    }
+    return true;
+}
+
 void applyApiListState()
 {
     char generated_at[32] = {0};
@@ -324,6 +335,17 @@ void applyApiListState()
         Serial.printf("METEO: recue %s, heures=%d\n", weather_state.location, weather_state.hourly_count);
         if (weather_changed && (active_tab == TAB_METEO || active_tab == TAB_CRECHE)) {
             requestPageDisplay(active_tab, list_state, "meteo actualisee");
+        }
+    }
+
+    MealWeekState remote_meal_week = {};
+    if (api.takeMealWeekState(remote_meal_week)) {
+        const bool meals_changed = !sameMealWeekState(meal_week_state, remote_meal_week);
+        meal_week_state = remote_meal_week;
+        display.setMealWeekState(meal_week_state);
+        Serial.printf("REPAS: recus, entrees=%d\n", meal_week_state.meal_count);
+        if (meals_changed && active_tab == TAB_REPAS) {
+            requestPageDisplay(TAB_REPAS, list_state, "repas actualises");
         }
     }
 
@@ -822,16 +844,18 @@ void handleReadOnlyTouch()
 
     logTouchEvent(event);
     if (event.logical_y >= 842) {
-        const NavTabId target_tab = event.logical_x < LOGICAL_WIDTH / 3
-            ? TAB_LISTES
-            : event.logical_x < (LOGICAL_WIDTH * 2) / 3 ? TAB_CRECHE : TAB_METEO;
+        const int8_t nav_index = min<int8_t>(3, max<int8_t>(0, event.logical_x / (LOGICAL_WIDTH / 4)));
+        const NavTabId primary_tabs[] = {TAB_LISTES, TAB_CRECHE, TAB_METEO, TAB_REPAS};
+        const NavTabId target_tab = primary_tabs[nav_index];
         if (target_tab != active_tab || list_picker_open) {
             active_tab = target_tab;
             list_picker_open = false;
             const char *reason = target_tab == TAB_METEO ? "navigation meteo"
-                : target_tab == TAB_CRECHE ? "navigation creche" : "navigation listes";
+                : target_tab == TAB_CRECHE ? "navigation creche"
+                : target_tab == TAB_REPAS ? "navigation repas" : "navigation listes";
             const char *preview = target_tab == TAB_METEO ? "navigation_meteo"
-                : target_tab == TAB_CRECHE ? "navigation_creche" : "navigation_listes";
+                : target_tab == TAB_CRECHE ? "navigation_creche"
+                : target_tab == TAB_REPAS ? "navigation_repas" : "navigation_listes";
             requestPageDisplay(active_tab, list_state, reason);
             emitPreviewState(preview);
             Serial.printf("Liste Frigo: navigation bas -> %s\n", navSerialName(target_tab));
@@ -839,7 +863,7 @@ void handleReadOnlyTouch()
         return;
     }
 
-    if (active_tab == TAB_METEO) {
+    if (active_tab != TAB_LISTES) {
         return;
     }
 

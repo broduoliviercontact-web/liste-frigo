@@ -10,6 +10,7 @@ public:
     void showKeyboard(const ListPageState &list_state, const char *value, bool extra_page);
     void setWeatherTime(uint8_t hour, uint8_t minute, bool valid);
     void setWeatherState(const WeatherState &state);
+    void setMealWeekState(const MealWeekState &state);
     void updateKeyboardValue(const char *value);
     void updateListItemToggle(int8_t visible_row, const ListPageState &list_state);
     void updateListItemToggles(uint8_t visible_rows_mask, const ListPageState &list_state);
@@ -25,12 +26,14 @@ private:
     uint8_t weather_minute = 0;
     bool weather_time_valid = false;
     WeatherState weather_state = {};
+    MealWeekState meal_week_state = {};
 
     void drawPage(NavTabId tab, const ListPageState *list_state);
     void drawHeader(NavTabId tab);
     void drawListesPage(const ListPageState *list_state);
     void drawWeatherPage();
     void drawCrechePage();
+    void drawMealsPage();
     void drawListPickerPage(const ListPageState &list_state);
     void drawKeyboardPage(const ListPageState &list_state, const char *value, bool extra_page);
     void drawKeyboardValue(const char *value);

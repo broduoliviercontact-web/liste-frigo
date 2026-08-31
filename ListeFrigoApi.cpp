@@ -144,6 +144,8 @@ void fetchTask(void *param)
         bool has_list_state = false;
         WeatherState fetched_weather = {};
         bool has_weather_state = false;
+        MealWeekState fetched_meal_week = {};
+        bool has_meal_week_state = false;
         const bool is_write_request = kind == ListeFrigoApi::REQUEST_TOGGLE_ITEM ||
                                       kind == ListeFrigoApi::REQUEST_SELECT_LIST ||
                                       kind == ListeFrigoApi::REQUEST_ADD_ITEM;
@@ -303,6 +305,22 @@ void fetchTask(void *param)
                         has_weather_state = fetched_weather.hourly_count > 0;
                     }
 
+                    JsonObject meals = doc["pages"]["repas"].as<JsonObject>();
+                    if (strcmp(meals["status"] | "", "ready") == 0) {
+                        fetched_meal_week.available = true;
+                        for (JsonObject meal : meals["meals"].as<JsonArray>()) {
+                            if (fetched_meal_week.meal_count >= WEEK_MEAL_COUNT) break;
+                            const int day_index = meal["dayIndex"] | -1;
+                            const char *moment = meal["moment"] | "";
+                            if (day_index < 0 || day_index > 6 || (strcmp(moment, "midi") != 0 && strcmp(moment, "soir") != 0)) continue;
+                            WeekMeal &target = fetched_meal_week.meals[fetched_meal_week.meal_count++];
+                            target.day_index = static_cast<uint8_t>(day_index);
+                            target.lunch = strcmp(moment, "midi") == 0;
+                            copyEpaperText(target.label, sizeof(target.label), meal["label"] | "", "-");
+                        }
+                        has_meal_week_state = true;
+                    }
+
                     success = true;
                     snprintf(message, sizeof(message), "JSON OK");
                 }
@@ -321,7 +339,8 @@ void fetchTask(void *param)
             client->finishFetch(success, http_code, payload.length(), message, active_tab, list_count, item_count,
                                 has_list_state ? fetched_list_state : nullptr, fetched_list_cache,
                                 fetched_list_cache_count, generated_at,
-                                has_weather_state ? &fetched_weather : nullptr);
+                                has_weather_state ? &fetched_weather : nullptr,
+                                has_meal_week_state ? &fetched_meal_week : nullptr);
         }
     }
 }
@@ -426,6 +445,14 @@ bool ListeFrigoApi::takeWeatherState(WeatherState &target)
     return true;
 }
 
+bool ListeFrigoApi::takeMealWeekState(MealWeekState &target)
+{
+    if (!meal_week_state_available) return false;
+    target = result_meal_week_state;
+    meal_week_state_available = false;
+    return true;
+}
+
 bool ListeFrigoApi::getCachedListState(int32_t list_id, ListPageState &target) const
 {
     for (int8_t i = 0; i < cached_list_count; ++i) {
@@ -527,7 +554,7 @@ void ListeFrigoApi::finishFetch(bool success, int http_code, size_t bytes, const
                                 const char *active_tab, uint32_t list_count, uint32_t item_count,
                                 const ListPageState *list_state, const ListPageState *list_cache,
                                 int8_t list_cache_count, const char *generated_at,
-                                const WeatherState *weather_state)
+                                const WeatherState *weather_state, const MealWeekState *meal_week_state)
 {
     result_http_code = http_code;
     result_bytes = bytes;
@@ -540,6 +567,8 @@ void ListeFrigoApi::finishFetch(bool success, int http_code, size_t bytes, const
     generated_at_available = success && result_generated_at[0] != '\0';
     weather_state_available = success && weather_state != nullptr;
     if (weather_state_available) result_weather_state = *weather_state;
+    meal_week_state_available = success && meal_week_state != nullptr;
+    if (meal_week_state_available) result_meal_week_state = *meal_week_state;
     result_has_list_state = success && list_state != nullptr;
     if (result_has_list_state) {
         result_list_state = *list_state;

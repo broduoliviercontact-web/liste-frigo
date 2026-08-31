@@ -182,6 +182,11 @@ void ListeFrigoDisplay::setWeatherState(const WeatherState &state)
     weather_state = state;
 }
 
+void ListeFrigoDisplay::setMealWeekState(const MealWeekState &state)
+{
+    meal_week_state = state;
+}
+
 void ListeFrigoDisplay::showPage(NavTabId tab, bool clear_panel, const ListPageState *list_state)
 {
     Serial.printf("Liste Frigo: affichage page %s\n", navSerialName(tab));
@@ -300,6 +305,10 @@ void ListeFrigoDisplay::drawPage(NavTabId tab, const ListPageState *list_state)
     }
     if (tab == TAB_CRECHE) {
         drawCrechePage();
+        return;
+    }
+    if (tab == TAB_REPAS) {
+        drawMealsPage();
         return;
     }
 
@@ -492,6 +501,33 @@ void ListeFrigoDisplay::drawCrechePage()
     fillRect(32, 770, LOGICAL_WIDTH - 64, 4, BLACK);
     drawCenteredText(804, "CESAR A LA CRECHE", 2, DARK);
     drawPrimaryNavBar(TAB_CRECHE);
+}
+
+void ListeFrigoDisplay::drawMealsPage()
+{
+    static const char *days[] = {"LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI", "SAMEDI", "DIMANCHE"};
+    drawText(52, 34, "REPAS", 3, DARK);
+    drawText(52, 74, "TOUTE LA SEMAINE", 4, BLACK);
+    fillRect(32, 116, LOGICAL_WIDTH - 64, 4, BLACK);
+
+    for (int8_t day = 0; day < 7; ++day) {
+        const int32_t y = 142 + day * 96;
+        const char *lunch = "-";
+        const char *dinner = "-";
+        for (int8_t meal = 0; meal < meal_week_state.meal_count; ++meal) {
+            const WeekMeal &entry = meal_week_state.meals[meal];
+            if (entry.day_index != day) continue;
+            if (entry.lunch) lunch = entry.label;
+            else dinner = entry.label;
+        }
+        drawText(52, y, days[day], 2, DARK);
+        drawText(52, y + 28, "MIDI", 2, DARK);
+        drawTextLimited(132, y + 28, lunch, 2, BLACK, 340);
+        drawText(52, y + 58, "SOIR", 2, DARK);
+        drawTextLimited(132, y + 58, dinner, 2, BLACK, 340);
+        fillRect(52, y + 82, 436, 2, BLACK);
+    }
+    drawPrimaryNavBar(TAB_REPAS);
 }
 
 int8_t ListeFrigoDisplay::weatherTemperature(int8_t hour) const
@@ -699,13 +735,14 @@ void ListeFrigoDisplay::drawNavBar(NavTabId selected_tab)
 void ListeFrigoDisplay::drawPrimaryNavBar(NavTabId selected_tab)
 {
     constexpr int32_t nav_top = 850;
-    constexpr int32_t item_width = (LOGICAL_WIDTH - 64) / 3;
+    constexpr int32_t item_width = (LOGICAL_WIDTH - 64) / 4;
     fillRect(32, nav_top - 4, LOGICAL_WIDTH - 64, 4, BLACK);
     fillRect(32, nav_top, LOGICAL_WIDTH - 64, 78, WHITE);
 
     const bool listes_selected = selected_tab == TAB_LISTES;
     const bool creche_selected = selected_tab == TAB_CRECHE;
     const bool meteo_selected = selected_tab == TAB_METEO;
+    const bool repas_selected = selected_tab == TAB_REPAS;
     if (listes_selected) {
         fillRect(35, nav_top + 6, item_width - 6, 60, BLACK);
     }
@@ -715,18 +752,25 @@ void ListeFrigoDisplay::drawPrimaryNavBar(NavTabId selected_tab)
     if (meteo_selected) {
         fillRect(32 + item_width * 2 + 3, nav_top + 6, item_width - 6, 60, BLACK);
     }
+    if (repas_selected) {
+        fillRect(32 + item_width * 3 + 3, nav_top + 6, item_width - 6, 60, BLACK);
+    }
 
     const uint8_t listes_ink = listes_selected ? WHITE : BLACK;
     const uint8_t creche_ink = creche_selected ? WHITE : BLACK;
     const uint8_t meteo_ink = meteo_selected ? WHITE : BLACK;
+    const uint8_t repas_ink = repas_selected ? WHITE : BLACK;
     drawRect(64, nav_top + 16, 28, 22, 3, listes_ink);
     fillRect(70, nav_top + 23, 16, 3, listes_ink);
     fillRect(70, nav_top + 31, 16, 3, listes_ink);
     drawText(100, nav_top + 22, "Listes", 2, listes_ink);
-    drawBabyNavIcon(202, nav_top + 12, creche_ink);
-    drawText(240, nav_top + 22, "Creche", 2, creche_ink);
-    drawWeatherCloud(368, nav_top + 17, meteo_ink);
-    drawText(412, nav_top + 22, "Meteo", 2, meteo_ink);
+    drawBabyNavIcon(157, nav_top + 12, creche_ink);
+    drawText(194, nav_top + 22, "Creche", 2, creche_ink);
+    drawWeatherCloud(278, nav_top + 17, meteo_ink);
+    drawText(322, nav_top + 22, "Meteo", 2, meteo_ink);
+    drawRect(412, nav_top + 18, 30, 22, 3, repas_ink);
+    fillRect(418, nav_top + 25, 18, 3, repas_ink);
+    drawText(450, nav_top + 22, "Repas", 2, repas_ink);
     fillRect(32, nav_top + 74, LOGICAL_WIDTH - 64, 4, BLACK);
 }
 
@@ -749,11 +793,11 @@ void ListeFrigoDisplay::drawNavItem(NavTabId tab, bool selected)
     } else if (tab == TAB_METEO) {
         drawRect(center_x - 19, nav_top + 28, 38, 20, 4, ink);
         fillRect(center_x - 12, nav_top + 18, 24, 14, ink);
-    } else if (tab == TAB_TENUES) {
+    } else if (tab == TAB_CRECHE) {
         drawRect(center_x - 16, nav_top + 18, 32, 34, 4, ink);
         fillRect(center_x - 26, nav_top + 22, 10, 13, ink);
         fillRect(center_x + 16, nav_top + 22, 10, 13, ink);
-    } else if (tab == TAB_VELIB) {
+    } else if (tab == TAB_REPAS) {
         drawRect(center_x - 25, nav_top + 34, 50, 16, 4, ink);
         drawRect(center_x - 22, nav_top + 18, 16, 16, 3, ink);
         drawRect(center_x + 6, nav_top + 18, 16, 16, 3, ink);
