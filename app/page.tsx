@@ -14,6 +14,29 @@ type EpaperWeather = {
   hourly?: Array<{ time: string; temperature: number; weatherCode: number; isDay: boolean }>;
 };
 
+function useEpaperWeather() {
+  const [weather, setWeather] = useState<EpaperWeather | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadWeather = async () => {
+      try {
+        const response = await fetch("/api/epaper/v1/state", { cache: "no-store" });
+        if (!response.ok) throw new Error("weather");
+        const data = await response.json() as { pages?: { meteo?: EpaperWeather } };
+        if (active && data.pages?.meteo) setWeather(data.pages.meteo);
+      } catch {
+        if (active) setWeather({ status: "unavailable", location: "Pantin" });
+      }
+    };
+    void loadWeather();
+    const timer = window.setInterval(loadWeather, 2 * 60 * 1000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+
+  return weather;
+}
+
 const initialItems: Item[] = [
   { id: 1, label: "Pain", checked: false },
   { id: 2, label: "Lait", checked: false },
@@ -104,28 +127,32 @@ const weatherScenarios: Record<WeatherMode, {
 };
 
 function CrechePage({ onLists, onWeather }: { onLists: () => void; onWeather: () => void }) {
-  const [mode, setMode] = useState<WeatherMode>("canicule");
+  const liveWeather = useEpaperWeather();
+  const temperature = liveWeather?.current?.temperature;
+  const weatherCode = liveWeather?.current?.weatherCode ?? 3;
+  const mode: WeatherMode = weatherCode >= 61 ? "pluie" : (temperature ?? 20) <= 7 ? "froid" : (temperature ?? 20) >= 25 ? "canicule" : "doux";
   const weather = weatherScenarios[mode];
+  const returnHour = liveWeather?.hourly?.find((hour) => hourLabel(hour.time) === "17");
+  const departureTemperature = temperature === undefined ? weather.morning : `${temperature}°C`;
+  const returnTemperature = returnHour ? `${returnHour.temperature}°C` : liveWeather?.today ? `${liveWeather.today.max}°C` : weather.evening;
+  const rainLabel = weatherCode >= 61 ? "Pluie en cours" : "Pas de pluie";
   return <div className="creche-page">
     <header className="creche-header">
-      <div><p className="eyebrow">MÉTÉO CRÈCHE</p><h1>Pantin</h1></div>
-      <div className="weather-now"><strong>{weather.now}</strong><span>{weather.icon}</span><small>12 AOÛT</small></div>
+      <div><p className="eyebrow">MÉTÉO CRÈCHE</p><h1>{liveWeather?.location ?? "Pantin"}</h1></div>
+      <div className="weather-now"><strong>{temperature === undefined ? weather.now : `${temperature}°`}</strong><span>{weatherIcon(weatherCode, liveWeather?.current?.isDay)}</span><small>MÉTÉO ACTUELLE</small></div>
     </header>
-    <div className="weather-demo" aria-label="Tester une tenue météo">
-      {(Object.keys(weatherScenarios) as WeatherMode[]).map((key) => <button key={key} className={mode === key ? "active" : ""} onClick={() => setMode(key)}>{weatherScenarios[key].label}</button>)}
-    </div>
     <section className="morning-card">
-      <div className="period-title"><div><p className="eyebrow">DÉPART · 8H</p><strong>{weather.morning}</strong></div><span>{weather.rain}</span></div>
+      <div className="period-title"><div><p className="eyebrow">MAINTENANT</p><strong>{departureTemperature}</strong></div><span>{rainLabel}</span></div>
       <div className="avatar-and-clothes">
         <div className="baby-avatar"><img src={weather.image} alt={`César habillé pour un temps ${weather.label.toLowerCase()}, avec son doudou girafe`} /></div>
         <ul>{weather.clothes.map((item) => <li key={item}>{item}</li>)}</ul>
       </div>
     </section>
     <section className="evening-card">
-      <div><p className="eyebrow">RETOUR · 17H</p><strong>{weather.evening}</strong></div>
-      <div className="sun-advice"><span>{weather.icon}</span><p><strong>{weather.feeling}</strong><br />{weather.advice}</p></div>
+      <div><p className="eyebrow">RETOUR · 17H</p><strong>{returnTemperature}</strong></div>
+      <div className="sun-advice"><span>{weatherIcon(returnHour?.weatherCode ?? liveWeather?.today?.weatherCode, true)}</span><p><strong>{weather.feeling}</strong><br />{weather.advice}</p></div>
     </section>
-    <p className="weather-update"><span /> Brief du 12 août · démonstration</p>
+    <p className="weather-update"><span /> {liveWeather?.status === "ready" ? "Météo synchronisée" : "Météo indisponible"}</p>
     <nav className="app-nav three" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button></nav>
   </div>;
 }
@@ -144,24 +171,7 @@ function hourLabel(time: string) {
 }
 
 function MeteoPage({ onLists, onCreche }: { onLists: () => void; onCreche: () => void }) {
-  const [weather, setWeather] = useState<EpaperWeather | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    const loadWeather = async () => {
-      try {
-        const response = await fetch("/api/epaper/v1/state", { cache: "no-store" });
-        if (!response.ok) throw new Error("weather");
-        const data = await response.json() as { pages?: { meteo?: EpaperWeather } };
-        if (active && data.pages?.meteo) setWeather(data.pages.meteo);
-      } catch {
-        if (active) setWeather({ status: "unavailable", location: "Pantin" });
-      }
-    };
-    void loadWeather();
-    const timer = window.setInterval(loadWeather, 15 * 60 * 1000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, []);
+  const weather = useEpaperWeather();
 
   const current = weather?.current;
   const today = weather?.today;
