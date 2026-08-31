@@ -35,8 +35,8 @@ button { color: inherit; }
 }
 
 .topbar {
-  min-height: 128px;
-  padding: 24px 26px 20px;
+  min-height: 104px;
+  padding: 16px 26px 14px;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -47,34 +47,34 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .list-switch { align-self: flex-start; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; border: 2px solid #111; background: transparent; padding: 7px 10px; font-size: 11px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
 .list-switch span { font-size: 18px; line-height: 1; }
 
-.summary { padding: 18px 26px 14px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.summary { padding: 10px 26px 8px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .summary > div { display: flex; align-items: baseline; gap: 9px; }
-.summary strong { font-size: 38px; line-height: 1; }
-.summary span { font-size: 15px; font-weight: 700; }
-.full-list-button { min-height: 38px; border: 2px solid #111; background: transparent; padding: 7px 10px; font-size: 10px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; cursor: pointer; }
+.summary strong { font-size: 32px; line-height: 1; }
+.summary span { font-size: 14px; font-weight: 700; }
+.full-list-button { min-height: 34px; border: 2px solid #111; background: transparent; padding: 6px 9px; font-size: 9px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; cursor: pointer; }
 
 .shopping-list { list-style: none; padding: 0 26px; margin: 0; overflow-y: auto; flex: 1; scroll-snap-type: y proximity; overscroll-behavior: contain; }
 .shopping-list li { border-bottom: 2px solid #111; scroll-snap-align: start; scroll-snap-stop: normal; }
-.item-button { width: 100%; min-height: 76px; border: 0; background: transparent; display: flex; align-items: center; gap: 16px; padding: 10px 2px; text-align: left; cursor: pointer; }
-.checkbox { width: 34px; height: 34px; border: 3px solid #111; display: grid; place-items: center; flex: 0 0 auto; font-size: 24px; font-weight: 900; line-height: 1; }
-.item-emoji { width: 38px; flex: 0 0 38px; text-align: center; font-size: 30px; line-height: 1; filter: grayscale(1) contrast(1.15); }
-.item-label { font-size: clamp(23px, 5.5vw, 29px); font-weight: 700; overflow-wrap: anywhere; }
+.item-button { width: 100%; min-height: 54px; border: 0; background: transparent; display: flex; align-items: center; gap: 12px; padding: 6px 2px; text-align: left; cursor: pointer; }
+.checkbox { width: 29px; height: 29px; border: 3px solid #111; display: grid; place-items: center; flex: 0 0 auto; font-size: 20px; font-weight: 900; line-height: 1; }
+.item-emoji { width: 31px; flex: 0 0 31px; text-align: center; font-size: 24px; line-height: 1; filter: grayscale(1) contrast(1.15); }
+.item-label { font-size: clamp(21px, 4.8vw, 25px); font-weight: 700; overflow-wrap: anywhere; }
 .checked .checkbox { background: #111; color: #fff; }
 .checked .item-label { text-decoration: line-through 3px; color: #666; }
 
-.controls { flex: 0 0 auto; border-top: 3px solid #111; padding: 14px 26px 18px; background: #f8f7f1; }
-.controls button { border: 2px solid #111; background: transparent; min-height: 48px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; cursor: pointer; }
+.controls { flex: 0 0 auto; border-top: 3px solid #111; padding: 9px 26px 12px; background: #f8f7f1; }
+.controls button { border: 2px solid #111; background: transparent; min-height: 42px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; cursor: pointer; }
 .quick-actions { display: grid; grid-template-columns: 1.45fr 1fr; gap: 10px; }
-.quick-actions button { font-size: 12px; }
-.primary-action { background: #111 !important; color: #fff !important; font-size: 14px !important; }
-.sync-line { margin: 13px 0 0; font-size: 11px; font-weight: 700; text-align: center; text-transform: uppercase; letter-spacing: .08em; }
+.quick-actions button { font-size: 10px; }
+.primary-action { background: #111 !important; color: #fff !important; font-size: 12px !important; }
+.sync-line { margin: 8px 0 0; font-size: 9px; font-weight: 700; text-align: center; text-transform: uppercase; letter-spacing: .08em; }
 .sync-line span { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #111; margin-right: 5px; }
 .sync-line.loading span { animation: sync-pulse 1s steps(2) infinite; }
 .sync-line.error { color: #555; }
 .sync-line.error span { background: transparent; border: 2px solid #111; }
 @keyframes sync-pulse { 50% { opacity: .25; } }
-.app-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-.app-nav button { min-height: 48px; border: 2px solid #111; background: transparent; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 18px; font-weight: 800; text-transform: uppercase; }
+.app-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.app-nav button { min-height: 42px; border: 2px solid #111; background: transparent; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; font-weight: 800; text-transform: uppercase; }
 .app-nav button.active { background: #111; color: #fff; }
 .app-nav button span { font-size: 12px; letter-spacing: .06em; }
 .app-nav.three { grid-template-columns: repeat(3, 1fr); }
@@ -184,29 +184,29 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
   .stage { display: block; padding: 0; }
   .device { width: 100vw; height: 100dvh; max-height: none; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none; }
   .prototype-note { display: none; }
-  .topbar { min-height: 78px; padding: 12px 18px 10px; }
+  .topbar { min-height: 70px; padding: 10px 18px 8px; }
   .eyebrow { margin-bottom: 2px; font-size: 9px; }
   h1 { font-size: clamp(29px, 8.8vw, 37px); }
   .list-switch { min-height: 32px; padding: 4px 6px; font-size: 7px; }
   .list-switch span { font-size: 13px; }
-  .summary { padding: 10px 18px 8px; }
+  .summary { padding: 8px 18px 6px; }
   .summary > div { min-width: 0; gap: 7px; }
-  .summary strong { font-size: 30px; }
-  .summary span { font-size: 12px; }
-  .full-list-button { min-height: 34px; padding: 5px 7px; font-size: 8px; }
+  .summary strong { font-size: 27px; }
+  .summary span { font-size: 11px; }
+  .full-list-button { min-height: 30px; padding: 4px 6px; font-size: 7px; }
   .shopping-list { padding: 0 18px; }
-  .item-button { min-height: 52px; gap: 9px; padding-block: 5px; }
-  .checkbox { width: 26px; height: 26px; border-width: 2px; font-size: 18px; }
-  .item-emoji { width: 25px; flex-basis: 25px; font-size: 22px; }
-  .item-label { font-size: clamp(18px, 5.2vw, 22px); }
-  .controls { padding: 8px 18px 10px; }
-  .controls button { min-height: 40px; }
+  .item-button { min-height: 48px; gap: 8px; padding-block: 4px; }
+  .checkbox { width: 25px; height: 25px; border-width: 2px; font-size: 17px; }
+  .item-emoji { width: 24px; flex-basis: 24px; font-size: 21px; }
+  .item-label { font-size: clamp(17px, 4.8vw, 21px); }
+  .controls { padding: 7px 18px 9px; }
+  .controls button { min-height: 38px; }
   .quick-actions button { font-size: 10px; }
   .primary-action { font-size: 11px !important; }
-  .sync-line { margin: 8px 0 0; font-size: 9px; }
+  .sync-line { margin: 6px 0 0; font-size: 8px; }
   .sync-line span { width: 7px; height: 7px; }
-  .app-nav { gap: 6px; margin-top: 8px; }
-  .app-nav button { min-height: 40px; }
+  .app-nav { gap: 6px; margin-top: 6px; }
+  .app-nav button { min-height: 38px; }
   .app-nav.three button { font-size: 13px; }
   .app-nav.three button span { font-size: 9px; }
   .full-list-header { padding: 24px 18px 18px; }
