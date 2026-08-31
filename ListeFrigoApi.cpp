@@ -4,6 +4,7 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include "secrets.h"
+#include "ListeFrigoTls.h"
 
 namespace {
 
@@ -16,10 +17,10 @@ constexpr uint32_t HTTP_TIMEOUT_MS = 7000;
 constexpr uint32_t WRITE_GAP_MS = 250;
 constexpr uint32_t TOGGLE_RETRY_DELAYS_MS[] = {1000, 2000, 5000, 10000, 30000};
 
-#if defined(EPAPER_BYPASS_TOKEN)
-constexpr bool HAS_EPAPER_TOKEN = true;
+#if defined(SUPERVIE_ACCESS_CODE)
+constexpr bool HAS_SUPERVIE_ACCESS_CODE = true;
 #else
-constexpr bool HAS_EPAPER_TOKEN = false;
+constexpr bool HAS_SUPERVIE_ACCESS_CODE = false;
 #endif
 
 void copyMessage(char *target, size_t target_size, const char *message)
@@ -127,7 +128,7 @@ void fetchTask(void *param)
         WiFiClientSecure secure_client;
         HTTPClient http;
 
-        secure_client.setInsecure();
+        secure_client.setCACert(SUPERVIE_TLS_CA);
         http.setTimeout(HTTP_TIMEOUT_MS);
         http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
@@ -158,8 +159,8 @@ void fetchTask(void *param)
 
         if (http.begin(secure_client, url)) {
             http.addHeader("Accept", "application/json");
-#if defined(EPAPER_BYPASS_TOKEN)
-            http.addHeader("OAI-Sites-Authorization", String("Bearer ") + EPAPER_BYPASS_TOKEN);
+#if defined(SUPERVIE_ACCESS_CODE)
+            http.addHeader("X-SUPERVIE-ACCESS-CODE", SUPERVIE_ACCESS_CODE);
 #endif
             if (is_write_request) {
                 http.addHeader("Content-Type", "application/json");
@@ -349,8 +350,8 @@ void fetchTask(void *param)
 
 void ListeFrigoApi::begin()
 {
-    if (!HAS_EPAPER_TOKEN) {
-        Serial.println("API: EPAPER_BYPASS_TOKEN absent dans secrets.h, client en attente");
+    if (!HAS_SUPERVIE_ACCESS_CODE) {
+        Serial.println("API: SUPERVIE_ACCESS_CODE absent dans secrets.h, client en attente");
         state = API_DISABLED;
         return;
     }

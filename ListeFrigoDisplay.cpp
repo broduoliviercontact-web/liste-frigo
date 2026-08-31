@@ -520,7 +520,9 @@ void ListeFrigoDisplay::drawMealsPage()
             if (entry.lunch) lunch = entry.label;
             else dinner = entry.label;
         }
-        drawText(52, y, days[day], 2, DARK);
+        // The bundled bitmap font has no bold face; a one-pixel overprint keeps day labels readable.
+        drawText(52, y, days[day], 2, BLACK);
+        drawText(53, y, days[day], 2, BLACK);
         drawText(52, y + 28, "MIDI", 2, DARK);
         drawTextLimited(132, y + 28, lunch, 2, BLACK, 340);
         drawText(52, y + 58, "SOIR", 2, DARK);
