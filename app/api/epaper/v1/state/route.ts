@@ -1,8 +1,9 @@
 import { readAll } from "../../../lists/route";
+import { readPantinWeather } from "../weather";
 
 export async function GET(request: Request) {
   try {
-    const lists = await readAll();
+    const [lists, weather] = await Promise.all([readAll(), readPantinWeather()]);
     const requestedId = Number(new URL(request.url).searchParams.get("listId"));
     const selectedIndex = lists.findIndex((list) => list.id === requestedId);
     const selectedList = lists[selectedIndex >= 0 ? selectedIndex : 0];
@@ -21,6 +22,7 @@ export async function GET(request: Request) {
           status: "ready",
           lists: orderedLists,
         },
+        meteo: weather,
       },
     });
   } catch (error) {
