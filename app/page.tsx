@@ -4,6 +4,15 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type Item = { id: number; label: string; checked: boolean };
 type ShoppingList = { id: number; name: string; items: Item[] };
+type EpaperWeather = {
+  status: "ready" | "unavailable";
+  location: string;
+  updatedAt?: string;
+  current?: { time: string; temperature: number; weatherCode: number; isDay: boolean };
+  today?: { min: number; max: number; weatherCode: number };
+  tomorrow?: { date: string; min: number; max: number; weatherCode: number };
+  hourly?: Array<{ time: string; temperature: number; weatherCode: number; isDay: boolean }>;
+};
 
 const initialItems: Item[] = [
   { id: 1, label: "Pain", checked: false },
@@ -94,7 +103,7 @@ const weatherScenarios: Record<WeatherMode, {
   froid: { label: "Froid", icon: "❄", now: "3°", morning: "2,4°C", evening: "6,8°C", rain: "10% pluie", image: "/avatars/cesar-froid-epaper.png", clothes: ["Manteau chaud", "Bonnet + écharpe", "Pantalon + bottines"], feeling: "Très froid", advice: "Bien couvrir les extrémités" },
 };
 
-function CrechePage({ onLists }: { onLists: () => void }) {
+function CrechePage({ onLists, onWeather }: { onLists: () => void; onWeather: () => void }) {
   const [mode, setMode] = useState<WeatherMode>("canicule");
   const weather = weatherScenarios[mode];
   return <div className="creche-page">
@@ -117,7 +126,61 @@ function CrechePage({ onLists }: { onLists: () => void }) {
       <div className="sun-advice"><span>{weather.icon}</span><p><strong>{weather.feeling}</strong><br />{weather.advice}</p></div>
     </section>
     <p className="weather-update"><span /> Brief du 12 août · démonstration</p>
-    <nav className="app-nav" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button></nav>
+    <nav className="app-nav three" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button></nav>
+  </div>;
+}
+
+function weatherIcon(weatherCode = 3, isDay = true) {
+  if (weatherCode >= 95) return "⛈";
+  if (weatherCode >= 61) return "☂";
+  if (weatherCode === 45) return "≋";
+  if (weatherCode === 2) return isDay ? "⛅" : "☾";
+  if (weatherCode === 3) return "☁";
+  return isDay ? "☀" : "☾";
+}
+
+function hourLabel(time: string) {
+  return new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "numeric", hourCycle: "h23" }).format(new Date(time));
+}
+
+function MeteoPage({ onLists, onCreche }: { onLists: () => void; onCreche: () => void }) {
+  const [weather, setWeather] = useState<EpaperWeather | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadWeather = async () => {
+      try {
+        const response = await fetch("/api/epaper/v1/state", { cache: "no-store" });
+        if (!response.ok) throw new Error("weather");
+        const data = await response.json() as { pages?: { meteo?: EpaperWeather } };
+        if (active && data.pages?.meteo) setWeather(data.pages.meteo);
+      } catch {
+        if (active) setWeather({ status: "unavailable", location: "Pantin" });
+      }
+    };
+    void loadWeather();
+    const timer = window.setInterval(loadWeather, 15 * 60 * 1000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+
+  const current = weather?.current;
+  const today = weather?.today;
+  const hourly = weather?.hourly ?? [];
+  return <div className="epaper-weather-page">
+    <header className="epaper-weather-header">
+      <div><p className="eyebrow">MÉTÉO SUPERVIE</p><h1>{weather?.location ?? "Pantin"}</h1></div>
+      <div className="epaper-weather-current"><strong>{current ? `${current.temperature}°` : "--"}</strong><span>{weatherIcon(current?.weatherCode, current?.isDay)}</span></div>
+    </header>
+    <section className="epaper-weather-summary">
+      <p className="eyebrow">AUJOURD&apos;HUI</p>
+      <strong>{today ? `${today.min}° · ${today.max}°` : "Prévisions indisponibles"}</strong>
+      <span>{weather?.status === "ready" ? "Synchronisé avec l'e-paper" : "Météo momentanément indisponible"}</span>
+    </section>
+    <section className="epaper-weather-hours" aria-label="Prévisions heure par heure">
+      {hourly.map((hour) => <article key={hour.time}><time>{hourLabel(hour.time)} h</time><span>{weatherIcon(hour.weatherCode, hour.isDay)}</span><strong>{hour.temperature}°</strong></article>)}
+    </section>
+    {weather?.tomorrow && <section className="epaper-weather-tomorrow"><div><p className="eyebrow">DEMAIN</p><strong>{weather.tomorrow.min}° · {weather.tomorrow.max}°</strong></div><span>{weatherIcon(weather.tomorrow.weatherCode)}</span></section>}
+    <nav className="app-nav three" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button className="active">☁ <span>Météo</span></button></nav>
   </div>;
 }
 
@@ -189,7 +252,7 @@ export default function Home() {
   const [newItemsText, setNewItemsText] = useState("");
   const [newListName, setNewListName] = useState("");
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
-  const [view, setView] = useState<"lists" | "creche">("lists");
+  const [view, setView] = useState<"lists" | "creche" | "meteo">("lists");
 
   const loadLists = useCallback(async (quiet = false) => {
     if (!quiet) setSyncState("loading");
@@ -279,7 +342,7 @@ export default function Home() {
   return (
     <main className="stage">
       <section className="device" aria-label="Aperçu de l'écran SUPERVIE">
-        {view === "creche" ? <CrechePage onLists={() => setView("lists")} /> : <>
+        {view === "creche" ? <CrechePage onLists={() => setView("lists")} onWeather={() => setView("meteo")} /> : view === "meteo" ? <MeteoPage onLists={() => setView("lists")} onCreche={() => setView("creche")} /> : <>
         <header className="topbar">
           <div>
             <p className="eyebrow">SUPERVIE · LISTE PARTAGÉE</p>
@@ -328,7 +391,7 @@ export default function Home() {
             <button onClick={clearChecked}>Effacer cochés</button>
           </div>
           <p className={`sync-line ${syncState}`}><span /> {syncState === "loading" ? "Synchronisation…" : syncState === "error" ? "Hors connexion — réessayer" : "Synchronisé"}</p>
-          <nav className="app-nav" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button></nav>
+          <nav className="app-nav three" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button><button onClick={() => setView("meteo")}>☁ <span>Météo</span></button></nav>
         </footer>
 
         {showAdd && (
