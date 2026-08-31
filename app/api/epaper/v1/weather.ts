@@ -1,7 +1,7 @@
 // Home location: 11 avenue du Colonel Fabien, Pantin.
 const PANTIN_LATITUDE = 48.8924;
 const PANTIN_LONGITUDE = 2.4248;
-const WEATHER_CACHE_MS = 15 * 60 * 1000;
+const WEATHER_CACHE_MS = 2 * 60 * 1000;
 
 type MetNoPoint = {
   time: string;
@@ -14,6 +14,10 @@ type MetNoPoint = {
 
 type MetNoResponse = {
   properties?: { meta?: { updated_at?: string }; timeseries?: MetNoPoint[] };
+};
+
+type OpenMeteoCurrentResponse = {
+  current?: { temperature_2m?: number; precipitation?: number; rain?: number; showers?: number; weather_code?: number };
 };
 
 export type EpaperWeather = {
@@ -60,6 +64,30 @@ function currentWeatherCode(point: MetNoPoint) {
   return 3;
 }
 
+function openMeteoWeatherCode(weatherCode?: number, precipitation?: number) {
+  if (typeof precipitation === "number" && precipitation >= 0.05) return 61;
+  if (weatherCode === 0) return 0;
+  if (weatherCode === 1 || weatherCode === 2) return 2;
+  if (weatherCode === 3) return 3;
+  if (weatherCode === 45 || weatherCode === 48) return 45;
+  return 3;
+}
+
+async function readCurrentConditions() {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${PANTIN_LATITUDE}&longitude=${PANTIN_LONGITUDE}&current=temperature_2m,precipitation,rain,showers,weather_code&timezone=Europe%2FParis&forecast_days=1`;
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: "application/json", "User-Agent": "SUPERVIE/1.0 contact@supervie.local" },
+      cf: { cacheEverything: true, cacheTtl: 120 },
+    } as RequestInit);
+    if (!response.ok) throw new Error(`Open-Meteo HTTP ${response.status}`);
+    return (await response.json() as OpenMeteoCurrentResponse).current ?? null;
+  } catch (error) {
+    console.error(`E-paper current weather unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+
 export async function readPantinWeather(): Promise<EpaperWeather> {
   if (cachedWeather && Date.now() < cacheExpiresAt) return cachedWeather;
 
@@ -71,7 +99,10 @@ export async function readPantinWeather(): Promise<EpaperWeather> {
       cf: { cacheEverything: true, cacheTtl: 900 },
     } as RequestInit);
     if (!response.ok) throw new Error(`MET Norway HTTP ${response.status}`);
-    const data = await response.json() as MetNoResponse;
+    const [data, currentConditions] = await Promise.all([
+      response.json() as Promise<MetNoResponse>,
+      readCurrentConditions(),
+    ]);
     const points = data.properties?.timeseries ?? [];
     const current = points[0];
     const currentTemperature = current?.data?.instant?.details?.air_temperature;
@@ -97,9 +128,14 @@ export async function readPantinWeather(): Promise<EpaperWeather> {
       location: "Pantin",
       timezone: "Europe/Paris",
       updatedAt: data.properties?.meta?.updated_at ?? new Date().toISOString(),
-      // MET symbols describe a future period. The current screen should show
-      // the instantaneous sky state rather than a possible shower in the next hour.
-      current: { time: current.time, temperature: Math.round(currentTemperature), weatherCode: currentWeatherCode(current), isDay: todaySymbol.endsWith("_day") },
+      // Prefer the short-lived current-conditions feed for rain now. MET's
+      // symbol remains the fallback because it describes a future period.
+      current: {
+        time: current.time,
+        temperature: Math.round(currentConditions?.temperature_2m ?? currentTemperature),
+        weatherCode: currentConditions ? openMeteoWeatherCode(currentConditions.weather_code, currentConditions.precipitation) : currentWeatherCode(current),
+        isDay: todaySymbol.endsWith("_day"),
+      },
       today: todayTemperatures.length ? { min: Math.round(Math.min(...todayTemperatures)), max: Math.round(Math.max(...todayTemperatures)), weatherCode: weatherCode(todaySymbol) } : undefined,
       tomorrow: tomorrowTemperatures.length ? { date: tomorrowDate, min: Math.round(Math.min(...tomorrowTemperatures)), max: Math.round(Math.max(...tomorrowTemperatures)), weatherCode: weatherCode(symbolFor(tomorrowPoint)) } : undefined,
       hourly,
