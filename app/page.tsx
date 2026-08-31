@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type Item = { id: number; label: string; checked: boolean };
 type ShoppingList = { id: number; name: string; items: Item[] };
+type Meal = { id: number; date: string; moment: "midi" | "soir"; label: string };
 type EpaperWeather = {
   status: "ready" | "unavailable";
   location: string;
@@ -126,7 +127,7 @@ const weatherScenarios: Record<WeatherMode, {
   froid: { label: "Froid", icon: "❄", now: "3°", morning: "2,4°C", evening: "6,8°C", rain: "10% pluie", image: "/avatars/cesar-froid-epaper.png", clothes: ["Manteau chaud", "Bonnet + écharpe", "Pantalon + bottines"], feeling: "Très froid", advice: "Bien couvrir les extrémités" },
 };
 
-function CrechePage({ onLists, onWeather }: { onLists: () => void; onWeather: () => void }) {
+function CrechePage({ onLists, onWeather, onMeals }: { onLists: () => void; onWeather: () => void; onMeals: () => void }) {
   const liveWeather = useEpaperWeather();
   const temperature = liveWeather?.current?.temperature;
   const weatherCode = liveWeather?.current?.weatherCode ?? 3;
@@ -153,7 +154,7 @@ function CrechePage({ onLists, onWeather }: { onLists: () => void; onWeather: ()
       <div className="sun-advice"><span>{weatherIcon(returnHour?.weatherCode ?? liveWeather?.today?.weatherCode, true)}</span><p><strong>{weather.feeling}</strong><br />{weather.advice}</p></div>
     </section>
     <p className="weather-update"><span /> {liveWeather?.status === "ready" ? "Météo synchronisée" : "Météo indisponible"}</p>
-    <nav className="app-nav three" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button></nav>
+    <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button><button onClick={onMeals}>🍽 <span>Repas</span></button></nav>
   </div>;
 }
 
@@ -170,7 +171,7 @@ function hourLabel(time: string) {
   return new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "numeric", hourCycle: "h23" }).format(new Date(time));
 }
 
-function MeteoPage({ onLists, onCreche }: { onLists: () => void; onCreche: () => void }) {
+function MeteoPage({ onLists, onCreche, onMeals }: { onLists: () => void; onCreche: () => void; onMeals: () => void }) {
   const weather = useEpaperWeather();
 
   const current = weather?.current;
@@ -190,7 +191,102 @@ function MeteoPage({ onLists, onCreche }: { onLists: () => void; onCreche: () =>
       {hourly.map((hour) => <article key={hour.time}><time>{hourLabel(hour.time)} h</time><span>{weatherIcon(hour.weatherCode, hour.isDay)}</span><strong>{hour.temperature}°</strong></article>)}
     </section>
     {weather?.tomorrow && <section className="epaper-weather-tomorrow"><div><p className="eyebrow">DEMAIN</p><strong>{weather.tomorrow.min}° · {weather.tomorrow.max}°</strong></div><span>{weatherIcon(weather.tomorrow.weatherCode)}</span></section>}
-    <nav className="app-nav three" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button className="active">☁ <span>Météo</span></button></nav>
+    <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button className="active">☁ <span>Météo</span></button><button onClick={onMeals}>🍽 <span>Repas</span></button></nav>
+  </div>;
+}
+
+const mealMoments: Array<{ id: "midi" | "soir"; label: string; icon: string; placeholder: string }> = [
+  { id: "midi", label: "Midi", icon: "☀", placeholder: "Ex. pâtes au pesto" },
+  { id: "soir", label: "Soir", icon: "☾", placeholder: "Ex. soupe et tartines" },
+];
+
+function dateFromMonday(monday: string, offset: number) {
+  const date = new Date(`${monday}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + offset);
+  return date.toISOString().slice(0, 10);
+}
+
+function mealDayLabel(date: string, compact = false) {
+  const formatted = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "Europe/Paris", weekday: compact ? "short" : "long", day: "numeric", month: compact ? undefined : "long",
+  }).format(new Date(`${date}T12:00:00Z`));
+  return formatted.replace(".", "");
+}
+
+function MealPlannerPage({ onLists, onCreche, onWeather }: { onLists: () => void; onCreche: () => void; onWeather: () => void }) {
+  const [monday, setMonday] = useState("");
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [state, setState] = useState<"loading" | "ready" | "saving" | "error">("loading");
+
+  const loadMeals = useCallback(async () => {
+    try {
+      const response = await fetch("/api/meals", { cache: "no-store" });
+      if (!response.ok) throw new Error("meals");
+      const data = await response.json() as { monday: string; meals: Meal[] };
+      setMonday(data.monday);
+      setMeals(data.meals);
+      setSelectedDate((current) => current || data.monday);
+      setDrafts((current) => {
+        const next = { ...current };
+        data.meals.forEach((meal) => { next[`${meal.date}-${meal.moment}`] = meal.label; });
+        return next;
+      });
+      setState("ready");
+    } catch { setState("error"); }
+  }, []);
+
+  useEffect(() => { void loadMeals(); }, [loadMeals]);
+
+  const days = monday ? Array.from({ length: 7 }, (_, index) => dateFromMonday(monday, index)) : [];
+  const selectedDay = selectedDate || monday;
+  const mealFor = (date: string, moment: Meal["moment"]) => meals.find((meal) => meal.date === date && meal.moment === moment)?.label;
+
+  async function saveMeal(event: FormEvent, moment: Meal["moment"]) {
+    event.preventDefault();
+    if (!selectedDay) return;
+    const key = `${selectedDay}-${moment}`;
+    setState("saving");
+    try {
+      const response = await fetch("/api/meals", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: selectedDay, moment, label: drafts[key] ?? "" }),
+      });
+      if (!response.ok) throw new Error("save");
+      const data = await response.json() as { meals: Meal[] };
+      setMeals(data.meals);
+      setState("ready");
+    } catch { setState("error"); }
+  }
+
+  return <div className="meals-page">
+    <header className="meals-header">
+      <div><p className="eyebrow">SUPERVIE · REPAS</p><h1>Cette semaine</h1></div>
+      <span>{state === "saving" ? "Enregistrement" : "MENU PARTAGÉ"}</span>
+    </header>
+    <section className="week-strip" aria-label="Jours de la semaine">
+      {days.map((date) => <button key={date} className={date === selectedDay ? "active" : ""} onClick={() => setSelectedDate(date)}>
+        <small>{mealDayLabel(date, true)}</small><strong>{date.slice(-2)}</strong><i>{mealFor(date, "midi") || mealFor(date, "soir") ? "•" : ""}</i>
+      </button>)}
+    </section>
+    <section className="meal-day" aria-live="polite">
+      <div className="meal-day-heading"><p className="eyebrow">JOUR SÉLECTIONNÉ</p><h2>{selectedDay ? mealDayLabel(selectedDay) : "Chargement"}</h2></div>
+      {mealMoments.map((moment) => {
+        const key = `${selectedDay}-${moment.id}`;
+        return <form className="meal-slot" key={moment.id} onSubmit={(event) => saveMeal(event, moment.id)}>
+          <div className="meal-slot-title"><span aria-hidden="true">{moment.icon}</span><div><p className="eyebrow">{moment.label}</p><strong>{moment.id === "midi" ? "Déjeuner" : "Dîner"}</strong></div></div>
+          <label className="visually-hidden" htmlFor={`meal-${moment.id}`}>{moment.label}</label>
+          <input id={`meal-${moment.id}`} value={drafts[key] ?? mealFor(selectedDay, moment.id) ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [key]: event.target.value }))} placeholder={moment.placeholder} />
+          <button type="submit">Enregistrer</button>
+        </form>;
+      })}
+    </section>
+    <section className="week-overview" aria-label="Aperçu de la semaine">
+      {days.map((date) => <button key={date} onClick={() => setSelectedDate(date)}><strong>{mealDayLabel(date, true)}</strong><span>{mealFor(date, "soir") || mealFor(date, "midi") || "À prévoir"}</span></button>)}
+    </section>
+    <p className={`meal-status ${state}`}><span /> {state === "error" ? "Synchronisation indisponible" : state === "saving" ? "Enregistrement…" : "Repas synchronisés"}</p>
+    <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button><button className="active">🍽 <span>Repas</span></button></nav>
   </div>;
 }
 
@@ -262,7 +358,7 @@ export default function Home() {
   const [newItemsText, setNewItemsText] = useState("");
   const [newListName, setNewListName] = useState("");
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
-  const [view, setView] = useState<"lists" | "creche" | "meteo">("lists");
+  const [view, setView] = useState<"lists" | "creche" | "meteo" | "meals">("lists");
 
   const loadLists = useCallback(async (quiet = false) => {
     if (!quiet) setSyncState("loading");
@@ -352,7 +448,7 @@ export default function Home() {
   return (
     <main className="stage">
       <section className="device" aria-label="Aperçu de l'écran SUPERVIE">
-        {view === "creche" ? <CrechePage onLists={() => setView("lists")} onWeather={() => setView("meteo")} /> : view === "meteo" ? <MeteoPage onLists={() => setView("lists")} onCreche={() => setView("creche")} /> : <>
+        {view === "creche" ? <CrechePage onLists={() => setView("lists")} onWeather={() => setView("meteo")} onMeals={() => setView("meals")} /> : view === "meteo" ? <MeteoPage onLists={() => setView("lists")} onCreche={() => setView("creche")} onMeals={() => setView("meals")} /> : view === "meals" ? <MealPlannerPage onLists={() => setView("lists")} onCreche={() => setView("creche")} onWeather={() => setView("meteo")} /> : <>
         <header className="topbar">
           <div>
             <p className="eyebrow">SUPERVIE · LISTE PARTAGÉE</p>
@@ -401,7 +497,7 @@ export default function Home() {
             <button onClick={clearChecked}>Effacer cochés</button>
           </div>
           <p className={`sync-line ${syncState}`}><span /> {syncState === "loading" ? "Synchronisation…" : syncState === "error" ? "Hors connexion — réessayer" : "Synchronisé"}</p>
-          <nav className="app-nav three" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button><button onClick={() => setView("meteo")}>☁ <span>Météo</span></button></nav>
+          <nav className="app-nav four" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button><button onClick={() => setView("meteo")}>☁ <span>Météo</span></button><button onClick={() => setView("meals")}>🍽 <span>Repas</span></button></nav>
         </footer>
 
         {showAdd && (

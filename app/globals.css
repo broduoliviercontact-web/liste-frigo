@@ -82,6 +82,39 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .app-nav.three { grid-template-columns: repeat(3, 1fr); }
 .app-nav.three button { gap: 5px; padding: 4px; font-size: 15px; }
 .app-nav.three button span { font-size: 10px; }
+.app-nav.four { grid-template-columns: repeat(4, 1fr); }
+.app-nav.four button { gap: 3px; padding: 4px 2px; font-size: 13px; }
+.app-nav.four button span { font-size: 8px; }
+
+.meals-page { min-height: 0; height: 100%; display: flex; flex-direction: column; padding: 24px 26px 18px; }
+.meals-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding-bottom: 16px; border-bottom: 3px solid #111; }
+.meals-header > span { border: 2px solid #111; padding: 6px 8px; font-size: 9px; font-weight: 900; letter-spacing: .06em; white-space: nowrap; }
+.week-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 14px 0; border-bottom: 3px solid #111; }
+.week-strip button { position: relative; min-height: 62px; border: 2px solid #111; background: transparent; display: grid; align-content: center; justify-items: center; cursor: pointer; }
+.week-strip button.active { background: #111; color: #fff; }
+.week-strip small { font-size: 8px; font-weight: 900; text-transform: uppercase; }
+.week-strip strong { margin-top: 3px; font-size: 20px; line-height: 1; }
+.week-strip i { position: absolute; bottom: 2px; font-style: normal; font-size: 16px; line-height: 1; }
+.meal-day { padding: 14px 0; display: grid; gap: 10px; }
+.meal-day-heading { padding-bottom: 8px; border-bottom: 2px solid #111; }
+.meal-day-heading h2 { margin: 3px 0 0; font-size: 27px; line-height: 1; text-transform: capitalize; }
+.meal-slot { min-height: 118px; border: 2px solid #111; display: grid; grid-template-columns: 112px 1fr; grid-template-rows: 1fr 42px; }
+.meal-slot-title { grid-row: 1 / 3; border-right: 2px solid #111; padding: 12px 10px; display: flex; flex-direction: column; justify-content: space-between; }
+.meal-slot-title > span { font-size: 30px; filter: grayscale(1); }
+.meal-slot-title p { margin: 0 0 4px; font-size: 8px; }
+.meal-slot-title strong { display: block; font-size: 16px; line-height: 1; }
+.meal-slot input { min-width: 0; border: 0; border-bottom: 2px solid #111; background: #fff; padding: 10px; font-size: 16px; font-weight: 700; outline: 0; }
+.meal-slot input:focus { box-shadow: inset 0 0 0 2px #999; }
+.meal-slot button { border: 0; background: #111; color: #fff; font-size: 10px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.week-overview { display: grid; grid-template-columns: 1fr 1fr; border-top: 3px solid #111; border-left: 2px solid #111; overflow-y: auto; }
+.week-overview button { min-height: 48px; border: 0; border-right: 2px solid #111; border-bottom: 2px solid #111; background: transparent; padding: 7px 8px; text-align: left; cursor: pointer; }
+.week-overview strong { display: block; margin-bottom: 3px; font-size: 9px; text-transform: uppercase; }
+.week-overview span { display: block; overflow: hidden; color: #444; font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.meal-status { margin: 10px 0 0; text-align: center; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.meal-status span { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: #111; }
+.meal-status.error span { border: 2px solid #111; background: transparent; }
+.meals-page > .app-nav { margin-top: auto; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .creche-page { min-height: 0; height: 100%; display: flex; flex-direction: column; padding: 24px 26px 18px; }
 .creche-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 16px; border-bottom: 3px solid #111; }
@@ -236,6 +269,23 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
   .app-nav button { min-height: 38px; }
   .app-nav.three button { font-size: 13px; }
   .app-nav.three button span { font-size: 9px; }
+  .app-nav.four button { min-height: 38px; font-size: 11px; }
+  .app-nav.four button span { font-size: 7px; }
+  .meals-page { padding: 16px 18px 10px; }
+  .meals-header { padding-bottom: 10px; }
+  .meals-header > span { font-size: 7px; padding: 5px; }
+  .week-strip { gap: 3px; padding: 10px 0; }
+  .week-strip button { min-height: 52px; }
+  .week-strip small { font-size: 7px; }
+  .week-strip strong { font-size: 17px; }
+  .meal-day { padding: 10px 0; gap: 8px; }
+  .meal-day-heading h2 { font-size: 23px; }
+  .meal-slot { min-height: 102px; grid-template-columns: 100px 1fr; grid-template-rows: 1fr 36px; }
+  .meal-slot-title { padding: 9px; }
+  .meal-slot-title > span { font-size: 24px; }
+  .meal-slot-title strong { font-size: 14px; }
+  .meal-slot input { padding: 8px; font-size: 14px; }
+  .week-overview button { min-height: 42px; }
   .full-list-header { padding: 24px 18px 18px; }
   .full-list-header h2 { font-size: clamp(35px, 10vw, 45px); }
   .full-shopping-list { padding: 0 18px 24px; }
