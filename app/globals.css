@@ -126,7 +126,7 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .weekly-meals-list p strong { display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.creche-page { min-height: 0; height: 100%; display: flex; flex-direction: column; padding: 24px 26px 18px; }
+.creche-page { min-height: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; padding: 24px 26px 18px; }
 .creche-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 16px; border-bottom: 3px solid #111; }
 .weather-now { display: grid; grid-template-columns: auto auto; align-items: center; gap: 0 9px; text-align: right; }
 .weather-now strong { font-size: 38px; line-height: 1; }
@@ -151,7 +151,7 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .sun-advice p { margin: 0; font-size: 12px; line-height: 1.35; }
 .weather-update { margin: 12px 0 0; text-align: center; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .weather-update span { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #111; }
-.creche-page > .app-nav { margin-top: auto; }
+.creche-page > .app-nav { flex: 0 0 auto; margin-top: auto; }
 
 .epaper-weather-page { min-height: 0; height: 100%; display: flex; flex-direction: column; padding: 24px 26px 18px; }
 .epaper-weather-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 16px; border-bottom: 3px solid #111; }
@@ -314,6 +314,22 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
   .epaper-weather-hours span { font-size: 22px; }
   .epaper-weather-tomorrow { padding: 9px 0; }
   .epaper-weather-tomorrow strong { font-size: 22px; }
+}
+
+@media (max-width: 600px) and (max-height: 760px) {
+  .creche-page { padding: 14px 18px 10px; }
+  .creche-header { padding-bottom: 10px; }
+  .morning-card { padding: 8px 0; }
+  .period-title strong, .evening-card > div > strong { font-size: 24px; }
+  .period-title > span { padding: 4px 6px; font-size: 8px; }
+  .avatar-and-clothes { min-height: 0; height: 220px; }
+  .baby-avatar { height: 212px; }
+  .avatar-and-clothes li { padding: 7px 0; font-size: 12px; }
+  .avatar-and-clothes li::before { width: 19px; height: 19px; margin-right: 5px; }
+  .evening-card { padding: 8px 0; }
+  .sun-advice > span { font-size: 30px; }
+  .sun-advice p { font-size: 10px; }
+  .weather-update { margin: 7px 0 0; font-size: 8px; }
 }
 
 @media (max-height: 760px) and (min-width: 601px) {
