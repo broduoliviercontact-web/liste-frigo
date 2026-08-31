@@ -29,6 +29,10 @@ export type EpaperWeather = {
   today?: { min: number; max: number; weatherCode: number };
   tomorrow?: { date: string; min: number; max: number; weatherCode: number };
   hourly?: Array<{ time: string; temperature: number; weatherCode: number; isDay: boolean }>;
+  creche?: {
+    departure?: { time: string; temperature: number; weatherCode: number; isDay: boolean };
+    return?: { time: string; temperature: number; weatherCode: number; isDay: boolean };
+  };
 };
 
 let cachedWeather: EpaperWeather | null = null;
@@ -71,6 +75,21 @@ function openMeteoWeatherCode(weatherCode?: number, precipitation?: number) {
   if (weatherCode === 3) return 3;
   if (weatherCode === 45 || weatherCode === 48) return 45;
   return 3;
+}
+
+function nextForecastAtHour(points: MetNoPoint[], startTime: string, hour: number) {
+  const start = Date.parse(startTime);
+  const point = points.find((candidate) => Date.parse(candidate.time) >= start && localParts(candidate.time).hour === hour);
+  const temperature = point?.data?.instant?.details?.air_temperature;
+  if (!point || typeof temperature !== "number") return undefined;
+  const local = localParts(point.time);
+  const symbol = symbolFor(point);
+  return {
+    time: `${local.date}T${String(local.hour).padStart(2, "0")}:00`,
+    temperature: Math.round(temperature),
+    weatherCode: weatherCode(symbol),
+    isDay: symbol.endsWith("_day"),
+  };
 }
 
 async function readCurrentConditions() {
@@ -123,6 +142,8 @@ export async function readPantinWeather(): Promise<EpaperWeather> {
     const tomorrowTemperatures = daily(tomorrowDate);
     const todaySymbol = symbolFor(current);
     const tomorrowPoint = points.find((point) => localParts(point.time).date === tomorrowDate) ?? current;
+    const crecheDeparture = nextForecastAtHour(points, current.time, 8);
+    const crecheReturn = nextForecastAtHour(points, current.time, 17);
     const weather: EpaperWeather = {
       status: "ready",
       location: "Pantin",
@@ -139,6 +160,7 @@ export async function readPantinWeather(): Promise<EpaperWeather> {
       today: todayTemperatures.length ? { min: Math.round(Math.min(...todayTemperatures)), max: Math.round(Math.max(...todayTemperatures)), weatherCode: weatherCode(todaySymbol) } : undefined,
       tomorrow: tomorrowTemperatures.length ? { date: tomorrowDate, min: Math.round(Math.min(...tomorrowTemperatures)), max: Math.round(Math.max(...tomorrowTemperatures)), weatherCode: weatherCode(symbolFor(tomorrowPoint)) } : undefined,
       hourly,
+      creche: { departure: crecheDeparture, return: crecheReturn },
     };
     cachedWeather = weather;
     cacheExpiresAt = Date.now() + WEATHER_CACHE_MS;
