@@ -45,6 +45,7 @@ async function readLine(favorite: TransitFavorite, apiKey: string): Promise<Tran
     };
     const journeys = data.Siri?.ServiceDelivery?.EstimatedTimetableDelivery?.[0]?.EstimatedJourneyVersionFrame?.[0]?.EstimatedVehicleJourney ?? [];
     const wantedStops = new Set(favorite.stopRefs.map((stopRef) => `STIF:StopPoint:Q:${stopRef}:`));
+    const passageCountsByDestination = new Map<string, number>();
     const passages = journeys.flatMap((journey) => {
       const destination = textValue(journey.DestinationName) || textValue(journey.DirectionName);
       if (favorite.direction && !destination.toLocaleLowerCase("fr").includes(favorite.direction.toLocaleLowerCase("fr"))) return [];
@@ -57,6 +58,12 @@ async function readLine(favorite: TransitFavorite, apiKey: string): Promise<Tran
     }).filter((passage) => Date.parse(passage.time) >= Date.now() - 60_000)
       .sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
       .filter((passage, index, all) => index === 0 || passage.time !== all[index - 1].time || passage.destination !== all[index - 1].destination)
+      // Keep room for both travel directions when one direction has frequent vehicles.
+      .filter((passage) => {
+        const count = passageCountsByDestination.get(passage.destination) ?? 0;
+        passageCountsByDestination.set(passage.destination, count + 1);
+        return count < 3;
+      })
       .slice(0, 8);
     return { ...favorite, available: passages.length > 0, passages };
   } catch (error) {
