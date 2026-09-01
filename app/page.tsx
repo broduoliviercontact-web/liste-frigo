@@ -344,21 +344,18 @@ function MealPlannerPage({ onLists, onCreche, onWeather, onMetro }: { onLists: (
 
 function MetroPage({ onLists, onCreche, onWeather, onMeals }: { onLists: () => void; onCreche: () => void; onWeather: () => void; onMeals: () => void }) {
   const transit = useTransit();
-  const stops = ["Hoche", "Porte de Pantin", "Ourcq", "Jaurès", "Gare du Nord", "Bastille", "Place d'Italie"];
-  const metro = transit?.lines.find((line) => line.id === "m5");
-  const buses = transit?.lines.filter((line) => line.mode === "bus") ?? [];
   const referenceTime = Date.parse(transit?.updatedAt ?? "") || 0;
   const minutesUntil = (time: string) => Math.max(0, Math.round((Date.parse(time) - referenceTime) / 60_000));
+  const lines = [...(transit?.lines ?? [])].sort((a, b) => {
+    const aTime = a.passages[0] ? Date.parse(a.passages[0].time) : Number.MAX_SAFE_INTEGER;
+    const bTime = b.passages[0] ? Date.parse(b.passages[0].time) : Number.MAX_SAFE_INTEGER;
+    return aTime - bTime;
+  });
 
   return <div className="metro-page">
     <header className="metro-header"><div><p className="eyebrow">DÉPLACEMENTS SUPERVIE</p><h1>Hoche</h1></div><span className="metro-symbol" aria-hidden="true">M</span></header>
-    <section className="metro-line" aria-label="Métro ligne 5">
-      <div className="metro-line-heading"><span>5</span><div><p className="eyebrow">MÉTRO</p><strong>Place d&apos;Italie</strong></div></div>
-      <p>Direction sud depuis Hoche {metro?.passages.length ? `· ${metro.passages.map((passage) => `${minutesUntil(passage.time)} min`).join(" · ")}` : ""}</p>
-      <div className="metro-route" aria-label="Principales stations vers Place d'Italie">{stops.map((stop, index) => <div key={stop} className={index === 0 || index === stops.length - 1 ? "endpoint" : ""}><i /><span>{stop}</span></div>)}</div>
-    </section>
-    <section className="metro-buses" aria-label="Bus favoris"><header><p className="eyebrow">BUS FAVORIS</p><strong>Prochains passages</strong></header>
-      <ul>{buses.map((bus) => <li key={bus.id}><b>{bus.label}</b><div><strong>{bus.available ? bus.passages.map((passage) => `${minutesUntil(passage.time)} min`).join(" · ") : "Indisponible"}</strong><span>{bus.stop}{bus.passages[0]?.destination ? ` · ${bus.passages[0].destination}` : ""}</span></div></li>)}</ul>
+    <section className="metro-departures" aria-label="Prochains passages"><header><p className="eyebrow">PROCHAINS PASSAGES</p><strong>{lines.filter((line) => line.available).length} lignes en direct</strong></header>
+      <ul>{lines.map((line) => <li key={line.id} className={line.available ? "" : "unavailable"}><b className={line.mode === "metro" ? "metro-badge" : ""}>{line.label}</b><div><strong>{line.available ? line.passages.map((passage) => `${minutesUntil(passage.time)} min`).join(" · ") : "Pas de donnée temps réel"}</strong><span>{line.passages[0]?.destination || line.direction || line.stop} <i>·</i> {line.stop}</span></div></li>)}</ul>
     </section>
     <p className="metro-note"><span /> {transit?.updatedAt ? `Temps réel · ${new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(new Date(transit.updatedAt))}` : "Chargement des passages"}</p>
     <nav className="app-nav five" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button><button onClick={onMeals}>🍽 <span>Repas</span></button><button className="active">Ⓜ <span>Métro</span></button></nav>
