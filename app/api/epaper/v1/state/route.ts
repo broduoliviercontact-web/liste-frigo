@@ -37,8 +37,13 @@ export async function GET(request: Request) {
             mode: line.mode,
             stop: line.stop,
             available: line.available,
-            destination: line.passages[0]?.destination ?? line.direction ?? "",
-            minutes: line.passages.map((passage) => Math.max(0, Math.round((Date.parse(passage.time) - Date.now()) / 60_000))),
+            directions: Object.values(line.passages.reduce<Record<string, { destination: string; minutes: number[] }>>((groups, passage) => {
+              const destination = passage.destination || line.direction || line.stop;
+              const group = groups[destination] ?? { destination, minutes: [] };
+              group.minutes.push(Math.max(0, Math.round((Date.parse(passage.time) - Date.now()) / 60_000)));
+              groups[destination] = group;
+              return groups;
+            }, {})).sort((a, b) => (a.minutes[0] ?? 999) - (b.minutes[0] ?? 999)).slice(0, 2),
           })),
         },
       },

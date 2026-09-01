@@ -16,11 +16,11 @@ const PRIM_URL = "https://prim.iledefrance-mobilites.fr/marketplace/requete-lign
 const CACHE_MS = 10 * 60 * 1000;
 
 const favorites: TransitFavorite[] = [
-  { id: "m5", label: "5", mode: "metro", lineRef: "C01375", stopRefs: ["463017"], stop: "Hoche", direction: "Place d'Italie" },
-  { id: "145", label: "145", mode: "bus", lineRef: "C01170", stopRefs: ["491921"], stop: "Église de Pantin" },
-  { id: "147", label: "147", mode: "bus", lineRef: "C01172", stopRefs: ["30119"], stop: "Église de Pantin - Métro" },
+  { id: "m5", label: "5", mode: "metro", lineRef: "C01375", stopRefs: ["22017", "463017"], stop: "Hoche" },
+  { id: "145", label: "145", mode: "bus", lineRef: "C01170", stopRefs: ["22337", "491921"], stop: "Église de Pantin - Métro" },
+  { id: "147", label: "147", mode: "bus", lineRef: "C01172", stopRefs: ["22337", "30119"], stop: "Église de Pantin - Métro" },
   { id: "245", label: "245", mode: "bus", lineRef: "C02713", stopRefs: ["22337"], stop: "Église de Pantin - Métro" },
-  { id: "318", label: "318", mode: "bus", lineRef: "C01281", stopRefs: ["37676"], stop: "Pantin - Raymond Queneau" },
+  { id: "318", label: "318", mode: "bus", lineRef: "C01281", stopRefs: ["25960", "37676"], stop: "Pantin - Raymond Queneau" },
   { id: "330", label: "330", mode: "bus", lineRef: "C01289", stopRefs: ["492451", "22568"], stop: "Hoche - Métro" },
 ];
 
@@ -56,8 +56,8 @@ async function readLine(favorite: TransitFavorite, apiKey: string): Promise<Tran
       });
     }).filter((passage) => Date.parse(passage.time) >= Date.now() - 60_000)
       .sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
-      .filter((passage, index, all) => index === 0 || passage.time !== all[index - 1].time)
-      .slice(0, 3);
+      .filter((passage, index, all) => index === 0 || passage.time !== all[index - 1].time || passage.destination !== all[index - 1].destination)
+      .slice(0, 8);
     return { ...favorite, available: passages.length > 0, passages };
   } catch (error) {
     console.error(`Transit ${favorite.label} unavailable: ${error instanceof Error ? error.message : String(error)}`);
