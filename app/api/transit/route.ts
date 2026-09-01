@@ -14,18 +14,18 @@ type Passage = { time: string; destination: string };
 
 const PRIM_URL = "https://prim.iledefrance-mobilites.fr/marketplace/requete-ligne";
 const CACHE_MS = 10 * 60 * 1000;
+const FAILURE_CACHE_MS = 5 * 60 * 1000;
 
 const favorites: TransitFavorite[] = [
   { id: "m5", label: "5", mode: "metro", lineRef: "C01375", stopRefs: ["22014", "463002"], stop: "Raymond Queneau" },
   { id: "145", label: "145", mode: "bus", lineRef: "C01170", stopRefs: ["16934", "37427"], stop: "Raymond Queneau - Métro" },
   { id: "147", label: "147", mode: "bus", lineRef: "C01172", stopRefs: ["16934", "37427"], stop: "Raymond Queneau - Métro" },
-  { id: "245", label: "245", mode: "bus", lineRef: "C02713", stopRefs: ["22337"], stop: "Église de Pantin - Métro" },
   { id: "318", label: "318", mode: "bus", lineRef: "C01281", stopRefs: ["26517", "26520"], stop: "Bretagnes" },
-  { id: "330", label: "330", mode: "bus", lineRef: "C01289", stopRefs: ["492451", "22568"], stop: "Hoche - Métro" },
 ];
 
 type TransitResult = TransitFavorite & { available: boolean; passages: Passage[] };
 let cached: { expiresAt: number; updatedAt: string; lines: TransitResult[] } | null = null;
+let lastSuccessful: { updatedAt: string; lines: TransitResult[] } | null = null;
 
 function textValue(value: unknown) {
   return Array.isArray(value) && typeof value[0]?.value === "string" ? value[0].value : "";
@@ -78,8 +78,16 @@ export async function readTransit() {
   const apiKey = typeof env.IDFM_PRIM_API_KEY === "string" ? env.IDFM_PRIM_API_KEY : "";
   if (!apiKey) return { updatedAt: new Date().toISOString(), lines: favorites.map((line) => ({ ...line, available: false, passages: [] })) };
   const lines = await Promise.all(favorites.map((line) => readLine(line, apiKey)));
-  cached = { expiresAt: Date.now() + CACHE_MS, updatedAt: new Date().toISOString(), lines };
-  return { updatedAt: cached.updatedAt, lines };
+  const updatedAt = new Date().toISOString();
+  if (lines.some((line) => line.available)) {
+    lastSuccessful = { updatedAt, lines };
+    cached = { expiresAt: Date.now() + CACHE_MS, updatedAt, lines };
+  } else if (lastSuccessful) {
+    cached = { expiresAt: Date.now() + FAILURE_CACHE_MS, ...lastSuccessful };
+  } else {
+    cached = { expiresAt: Date.now() + FAILURE_CACHE_MS, updatedAt, lines };
+  }
+  return { updatedAt: cached.updatedAt, lines: cached.lines };
 }
 
 export async function GET(request: Request) {
