@@ -15,6 +15,8 @@ type EpaperWeather = {
   hourly?: Array<{ time: string; temperature: number; weatherCode: number; isDay: boolean }>;
 };
 
+type TransitLine = { id: string; label: string; mode: "metro" | "bus"; stop: string; direction?: string; available: boolean; passages: Array<{ time: string; destination: string }> };
+
 function useEpaperWeather() {
   const [weather, setWeather] = useState<EpaperWeather | null>(null);
 
@@ -36,6 +38,27 @@ function useEpaperWeather() {
   }, []);
 
   return weather;
+}
+
+function useTransit() {
+  const [transit, setTransit] = useState<{ updatedAt: string; lines: TransitLine[] } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await fetch("/api/transit", { cache: "no-store" });
+        if (!response.ok) throw new Error("transit");
+        const data = await response.json() as { updatedAt: string; lines: TransitLine[] };
+        if (active) setTransit(data);
+      } catch { if (active) setTransit({ updatedAt: "", lines: [] }); }
+    };
+    const firstLoad = window.setTimeout(() => { void load(); }, 0);
+    const timer = window.setInterval(load, 10 * 60 * 1000);
+    return () => { active = false; window.clearTimeout(firstLoad); window.clearInterval(timer); };
+  }, []);
+
+  return transit;
 }
 
 const initialItems: Item[] = [
@@ -320,24 +343,24 @@ function MealPlannerPage({ onLists, onCreche, onWeather, onMetro }: { onLists: (
 }
 
 function MetroPage({ onLists, onCreche, onWeather, onMeals }: { onLists: () => void; onCreche: () => void; onWeather: () => void; onMeals: () => void }) {
+  const transit = useTransit();
   const stops = ["Hoche", "Porte de Pantin", "Ourcq", "Jaurès", "Gare du Nord", "Bastille", "Place d'Italie"];
-  const buses = [
-    { line: "75", destination: "Panthéon / Porte de Pantin", stop: "Hoche - Métro" },
-    { line: "330", destination: "Pantin RER - Mairie", stop: "Hoche - Métro" },
-    { line: "P'tit Bus", destination: "Boucle de Pantin", stop: "Hoche - Jean Lolive" },
-  ];
+  const metro = transit?.lines.find((line) => line.id === "m5");
+  const buses = transit?.lines.filter((line) => line.mode === "bus") ?? [];
+  const referenceTime = Date.parse(transit?.updatedAt ?? "") || 0;
+  const minutesUntil = (time: string) => Math.max(0, Math.round((Date.parse(time) - referenceTime) / 60_000));
 
   return <div className="metro-page">
     <header className="metro-header"><div><p className="eyebrow">DÉPLACEMENTS SUPERVIE</p><h1>Hoche</h1></div><span className="metro-symbol" aria-hidden="true">M</span></header>
     <section className="metro-line" aria-label="Métro ligne 5">
       <div className="metro-line-heading"><span>5</span><div><p className="eyebrow">MÉTRO</p><strong>Place d&apos;Italie</strong></div></div>
-      <p>Direction sud depuis Hoche</p>
+      <p>Direction sud depuis Hoche {metro?.passages.length ? `· ${metro.passages.map((passage) => `${minutesUntil(passage.time)} min`).join(" · ")}` : ""}</p>
       <div className="metro-route" aria-label="Principales stations vers Place d'Italie">{stops.map((stop, index) => <div key={stop} className={index === 0 || index === stops.length - 1 ? "endpoint" : ""}><i /><span>{stop}</span></div>)}</div>
     </section>
-    <section className="metro-buses" aria-label="Bus autour de Hoche"><header><p className="eyebrow">AUTOUR DE HOCHE</p><strong>Bus</strong></header>
-      <ul>{buses.map((bus) => <li key={bus.line}><b>{bus.line}</b><div><strong>{bus.destination}</strong><span>{bus.stop}</span></div></li>)}</ul>
+    <section className="metro-buses" aria-label="Bus favoris"><header><p className="eyebrow">BUS FAVORIS</p><strong>Prochains passages</strong></header>
+      <ul>{buses.map((bus) => <li key={bus.id}><b>{bus.label}</b><div><strong>{bus.available ? bus.passages.map((passage) => `${minutesUntil(passage.time)} min`).join(" · ") : "Indisponible"}</strong><span>{bus.stop}{bus.passages[0]?.destination ? ` · ${bus.passages[0].destination}` : ""}</span></div></li>)}</ul>
     </section>
-    <p className="metro-note"><span /> Horaires en direct à connecter</p>
+    <p className="metro-note"><span /> {transit?.updatedAt ? `Temps réel · ${new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(new Date(transit.updatedAt))}` : "Chargement des passages"}</p>
     <nav className="app-nav five" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button><button onClick={onMeals}>🍽 <span>Repas</span></button><button className="active">Ⓜ <span>Métro</span></button></nav>
   </div>;
 }
