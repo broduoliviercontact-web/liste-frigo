@@ -5,7 +5,7 @@ type TransitFavorite = {
   label: string;
   mode: "metro" | "bus";
   lineRef: string;
-  stopRef: string;
+  stopRefs: string[];
   stop: string;
   direction?: string;
 };
@@ -16,12 +16,12 @@ const PRIM_URL = "https://prim.iledefrance-mobilites.fr/marketplace/requete-lign
 const CACHE_MS = 10 * 60 * 1000;
 
 const favorites: TransitFavorite[] = [
-  { id: "m5", label: "5", mode: "metro", lineRef: "C01375", stopRef: "463017", stop: "Hoche", direction: "Place d'Italie" },
-  { id: "145", label: "145", mode: "bus", lineRef: "C01170", stopRef: "491921", stop: "Église de Pantin" },
-  { id: "147", label: "147", mode: "bus", lineRef: "C01172", stopRef: "30119", stop: "Église de Pantin - Métro" },
-  { id: "245", label: "245", mode: "bus", lineRef: "C02713", stopRef: "30119", stop: "Église de Pantin - Métro" },
-  { id: "318", label: "318", mode: "bus", lineRef: "C01281", stopRef: "37676", stop: "Pantin - Raymond Queneau" },
-  { id: "330", label: "330", mode: "bus", lineRef: "C01289", stopRef: "491406", stop: "Hoche" },
+  { id: "m5", label: "5", mode: "metro", lineRef: "C01375", stopRefs: ["463017"], stop: "Hoche", direction: "Place d'Italie" },
+  { id: "145", label: "145", mode: "bus", lineRef: "C01170", stopRefs: ["491921"], stop: "Église de Pantin" },
+  { id: "147", label: "147", mode: "bus", lineRef: "C01172", stopRefs: ["30119"], stop: "Église de Pantin - Métro" },
+  { id: "245", label: "245", mode: "bus", lineRef: "C02713", stopRefs: ["22337"], stop: "Église de Pantin - Métro" },
+  { id: "318", label: "318", mode: "bus", lineRef: "C01281", stopRefs: ["37676"], stop: "Pantin - Raymond Queneau" },
+  { id: "330", label: "330", mode: "bus", lineRef: "C01289", stopRefs: ["492451", "22568"], stop: "Hoche - Métro" },
 ];
 
 type TransitResult = TransitFavorite & { available: boolean; passages: Passage[] };
@@ -44,7 +44,7 @@ async function readLine(favorite: TransitFavorite, apiKey: string): Promise<Tran
       Siri?: { ServiceDelivery?: { EstimatedTimetableDelivery?: Array<{ EstimatedJourneyVersionFrame?: Array<{ EstimatedVehicleJourney?: Array<Record<string, unknown>> }> }> } };
     };
     const journeys = data.Siri?.ServiceDelivery?.EstimatedTimetableDelivery?.[0]?.EstimatedJourneyVersionFrame?.[0]?.EstimatedVehicleJourney ?? [];
-    const wantedStop = `STIF:StopPoint:Q:${favorite.stopRef}:`;
+    const wantedStops = new Set(favorite.stopRefs.map((stopRef) => `STIF:StopPoint:Q:${stopRef}:`));
     const passages = journeys.flatMap((journey) => {
       const destination = textValue(journey.DestinationName) || textValue(journey.DirectionName);
       if (favorite.direction && !destination.toLocaleLowerCase("fr").includes(favorite.direction.toLocaleLowerCase("fr"))) return [];
@@ -52,7 +52,7 @@ async function readLine(favorite: TransitFavorite, apiKey: string): Promise<Tran
       return calls.flatMap((call) => {
         const ref = (call.StopPointRef as { value?: string } | undefined)?.value;
         const time = typeof call.ExpectedDepartureTime === "string" ? call.ExpectedDepartureTime : typeof call.ExpectedArrivalTime === "string" ? call.ExpectedArrivalTime : "";
-        return ref === wantedStop && time ? [{ time, destination }] : [];
+        return wantedStops.has(ref ?? "") && time ? [{ time, destination }] : [];
       });
     }).filter((passage) => Date.parse(passage.time) >= Date.now() - 60_000)
       .sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
