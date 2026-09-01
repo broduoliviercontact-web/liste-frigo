@@ -127,7 +127,7 @@ const weatherScenarios: Record<WeatherMode, {
   froid: { label: "Froid", icon: "❄", now: "3°", morning: "2,4°C", evening: "6,8°C", rain: "10% pluie", image: "/avatars/cesar-froid-epaper.png", clothes: ["Manteau chaud", "Bonnet + écharpe", "Pantalon + bottines"], feeling: "Très froid", advice: "Bien couvrir les extrémités" },
 };
 
-function CrechePage({ onLists, onWeather, onMeals }: { onLists: () => void; onWeather: () => void; onMeals: () => void }) {
+function CrechePage({ onLists, onWeather, onMeals, onMetro }: { onLists: () => void; onWeather: () => void; onMeals: () => void; onMetro: () => void }) {
   const liveWeather = useEpaperWeather();
   const temperature = liveWeather?.current?.temperature;
   const weatherCode = liveWeather?.current?.weatherCode ?? 3;
@@ -154,7 +154,7 @@ function CrechePage({ onLists, onWeather, onMeals }: { onLists: () => void; onWe
       <div className="sun-advice"><span>{weatherIcon(returnHour?.weatherCode ?? liveWeather?.today?.weatherCode, true)}</span><p><strong>{weather.feeling}</strong><br />{weather.advice}</p></div>
     </section>
     <p className="weather-update"><span /> {liveWeather?.status === "ready" ? "Météo synchronisée" : "Météo indisponible"}</p>
-    <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button><button onClick={onMeals}>🍽 <span>Repas</span></button></nav>
+    <nav className="app-nav five" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button className="active">🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button><button onClick={onMeals}>🍽 <span>Repas</span></button><button onClick={onMetro}>Ⓜ <span>Métro</span></button></nav>
   </div>;
 }
 
@@ -180,7 +180,7 @@ function hourLabel(time: string) {
   return new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "numeric", hourCycle: "h23" }).format(new Date(time));
 }
 
-function MeteoPage({ onLists, onCreche, onMeals }: { onLists: () => void; onCreche: () => void; onMeals: () => void }) {
+function MeteoPage({ onLists, onCreche, onMeals, onMetro }: { onLists: () => void; onCreche: () => void; onMeals: () => void; onMetro: () => void }) {
   const weather = useEpaperWeather();
 
   const current = weather?.current;
@@ -206,7 +206,7 @@ function MeteoPage({ onLists, onCreche, onMeals }: { onLists: () => void; onCrec
       </div>
     </section>
     {weather?.tomorrow && <section className="epaper-weather-tomorrow"><div><p className="eyebrow">DEMAIN</p><strong>{weather.tomorrow.min}° · {weather.tomorrow.max}°</strong></div><span>{weatherIcon(weather.tomorrow.weatherCode)}</span></section>}
-    <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button className="active">☁ <span>Météo</span></button><button onClick={onMeals}>🍽 <span>Repas</span></button></nav>
+    <nav className="app-nav five" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button className="active">☁ <span>Météo</span></button><button onClick={onMeals}>🍽 <span>Repas</span></button><button onClick={onMetro}>Ⓜ <span>Métro</span></button></nav>
   </div>;
 }
 
@@ -228,7 +228,7 @@ function mealDayLabel(date: string, compact = false) {
   return formatted.replace(".", "");
 }
 
-function MealPlannerPage({ onLists, onCreche, onWeather }: { onLists: () => void; onCreche: () => void; onWeather: () => void }) {
+function MealPlannerPage({ onLists, onCreche, onWeather, onMetro }: { onLists: () => void; onCreche: () => void; onWeather: () => void; onMetro: () => void }) {
   const [monday, setMonday] = useState("");
   const [meals, setMeals] = useState<Meal[]>([]);
   const [selectedDate, setSelectedDate] = useState("");
@@ -305,7 +305,7 @@ function MealPlannerPage({ onLists, onCreche, onWeather }: { onLists: () => void
       {days.map((date) => <button key={date} onClick={() => setSelectedDate(date)}><strong>{mealDayLabel(date, true)}</strong><span>{mealFor(date, "soir") || mealFor(date, "midi") || "À prévoir"}</span></button>)}
     </section>
     <p className={`meal-status ${state}`}><span /> {state === "error" ? "Synchronisation indisponible" : state === "saving" ? "Enregistrement…" : "Repas synchronisés"}</p>
-    <nav className="app-nav four" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button><button className="active">🍽 <span>Repas</span></button></nav>
+    <nav className="app-nav five" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button><button className="active">🍽 <span>Repas</span></button><button onClick={onMetro}>Ⓜ <span>Métro</span></button></nav>
     {showWeeklyView && <section className="weekly-meals-screen" aria-label="Tous les repas de la semaine">
       <header className="weekly-meals-header"><div><p className="eyebrow">SUPERVIE · MENU PARTAGÉ</p><h2>Toute la semaine</h2></div><button onClick={() => setShowWeeklyView(false)} aria-label="Fermer la semaine">×</button></header>
       <div className="weekly-meals-list">
@@ -316,6 +316,29 @@ function MealPlannerPage({ onLists, onCreche, onWeather }: { onLists: () => void
         </article>)}
       </div>
     </section>}
+  </div>;
+}
+
+function MetroPage({ onLists, onCreche, onWeather, onMeals }: { onLists: () => void; onCreche: () => void; onWeather: () => void; onMeals: () => void }) {
+  const stops = ["Hoche", "Porte de Pantin", "Ourcq", "Jaurès", "Gare du Nord", "Bastille", "Place d'Italie"];
+  const buses = [
+    { line: "75", destination: "Panthéon / Porte de Pantin", stop: "Hoche - Métro" },
+    { line: "330", destination: "Pantin RER - Mairie", stop: "Hoche - Métro" },
+    { line: "P'tit Bus", destination: "Boucle de Pantin", stop: "Hoche - Jean Lolive" },
+  ];
+
+  return <div className="metro-page">
+    <header className="metro-header"><div><p className="eyebrow">DÉPLACEMENTS SUPERVIE</p><h1>Hoche</h1></div><span className="metro-symbol" aria-hidden="true">M</span></header>
+    <section className="metro-line" aria-label="Métro ligne 5">
+      <div className="metro-line-heading"><span>5</span><div><p className="eyebrow">MÉTRO</p><strong>Place d&apos;Italie</strong></div></div>
+      <p>Direction sud depuis Hoche</p>
+      <div className="metro-route" aria-label="Principales stations vers Place d'Italie">{stops.map((stop, index) => <div key={stop} className={index === 0 || index === stops.length - 1 ? "endpoint" : ""}><i /><span>{stop}</span></div>)}</div>
+    </section>
+    <section className="metro-buses" aria-label="Bus autour de Hoche"><header><p className="eyebrow">AUTOUR DE HOCHE</p><strong>Bus</strong></header>
+      <ul>{buses.map((bus) => <li key={bus.line}><b>{bus.line}</b><div><strong>{bus.destination}</strong><span>{bus.stop}</span></div></li>)}</ul>
+    </section>
+    <p className="metro-note"><span /> Horaires en direct à connecter</p>
+    <nav className="app-nav five" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button><button onClick={onMeals}>🍽 <span>Repas</span></button><button className="active">Ⓜ <span>Métro</span></button></nav>
   </div>;
 }
 
@@ -351,7 +374,7 @@ export default function Home() {
   const [newItemsText, setNewItemsText] = useState("");
   const [newListName, setNewListName] = useState("");
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
-  const [view, setView] = useState<"lists" | "creche" | "meteo" | "meals">("lists");
+  const [view, setView] = useState<"lists" | "creche" | "meteo" | "meals" | "metro">("lists");
   const [access, setAccess] = useState<"checking" | "denied" | "granted">("checking");
 
   useEffect(() => {
@@ -452,7 +475,7 @@ export default function Home() {
   return (
     <main className="stage">
       <section className="device" aria-label="Aperçu de l'écran SUPERVIE">
-        {view === "creche" ? <CrechePage onLists={() => setView("lists")} onWeather={() => setView("meteo")} onMeals={() => setView("meals")} /> : view === "meteo" ? <MeteoPage onLists={() => setView("lists")} onCreche={() => setView("creche")} onMeals={() => setView("meals")} /> : view === "meals" ? <MealPlannerPage onLists={() => setView("lists")} onCreche={() => setView("creche")} onWeather={() => setView("meteo")} /> : <>
+        {view === "creche" ? <CrechePage onLists={() => setView("lists")} onWeather={() => setView("meteo")} onMeals={() => setView("meals")} onMetro={() => setView("metro")} /> : view === "meteo" ? <MeteoPage onLists={() => setView("lists")} onCreche={() => setView("creche")} onMeals={() => setView("meals")} onMetro={() => setView("metro")} /> : view === "meals" ? <MealPlannerPage onLists={() => setView("lists")} onCreche={() => setView("creche")} onWeather={() => setView("meteo")} onMetro={() => setView("metro")} /> : view === "metro" ? <MetroPage onLists={() => setView("lists")} onCreche={() => setView("creche")} onWeather={() => setView("meteo")} onMeals={() => setView("meals")} /> : <>
         <header className="topbar">
           <div>
             <p className="eyebrow">SUPERVIE · LISTE PARTAGÉE</p>
@@ -501,7 +524,7 @@ export default function Home() {
             <button onClick={clearChecked}>Effacer cochés</button>
           </div>
           <p className={`sync-line ${syncState}`}><span /> {syncState === "loading" ? "Synchronisation…" : syncState === "error" ? "Hors connexion — réessayer" : "Synchronisé"}</p>
-          <nav className="app-nav four" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button><button onClick={() => setView("meteo")}>☁ <span>Météo</span></button><button onClick={() => setView("meals")}>🍽 <span>Repas</span></button></nav>
+          <nav className="app-nav five" aria-label="Navigation principale"><button className="active">🛒 <span>Listes</span></button><button onClick={() => setView("creche")}>🧒 <span>Crèche</span></button><button onClick={() => setView("meteo")}>☁ <span>Météo</span></button><button onClick={() => setView("meals")}>🍽 <span>Repas</span></button><button onClick={() => setView("metro")}>Ⓜ <span>Métro</span></button></nav>
         </footer>
 
         {showAdd && (
