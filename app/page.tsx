@@ -351,13 +351,20 @@ function MetroPage({ onLists, onCreche, onWeather, onMeals }: { onLists: () => v
     const bTime = b.passages[0] ? Date.parse(b.passages[0].time) : Number.MAX_SAFE_INTEGER;
     return aTime - bTime;
   });
+  const activeLines = lines.filter((line) => line.available);
+  const unavailableLines = lines.filter((line) => !line.available);
+  const formatNext = (time: string) => {
+    const minutes = minutesUntil(time);
+    return minutes === 0 ? "À quai" : `${minutes} min`;
+  };
 
   return <div className="metro-page">
-    <header className="metro-header"><div><p className="eyebrow">DÉPLACEMENTS SUPERVIE</p><h1>Hoche</h1></div><span className="metro-symbol" aria-hidden="true">M</span></header>
-    <section className="metro-departures" aria-label="Prochains passages"><header><p className="eyebrow">PROCHAINS PASSAGES</p><strong>{lines.filter((line) => line.available).length} lignes en direct</strong></header>
-      <ul>{lines.map((line) => <li key={line.id} className={line.available ? "" : "unavailable"}><b className={line.mode === "metro" ? "metro-badge" : ""}>{line.label}</b><div><strong>{line.available ? line.passages.map((passage) => `${minutesUntil(passage.time)} min`).join(" · ") : "Pas de donnée temps réel"}</strong><span>{line.passages[0]?.destination || line.direction || line.stop} <i>·</i> {line.stop}</span></div></li>)}</ul>
+    <header className="metro-header"><div><p className="eyebrow">DÉPLACEMENTS SUPERVIE</p><h1>Hoche</h1><span>Station métro · Bus</span></div><span className="metro-symbol" aria-hidden="true">M</span></header>
+    <section className="metro-departures" aria-label="Prochains passages"><header><p className="eyebrow">DÉPARTS À VENIR</p><strong>{activeLines.length ? `${activeLines.length} lignes en direct` : "Mise à jour en cours"}</strong></header>
+      <ul>{activeLines.map((line) => <li key={line.id}><b className={line.mode === "metro" ? "metro-badge" : ""}>{line.label}</b><div><p>{line.passages[0]?.destination || line.direction || line.stop}</p><strong>{formatNext(line.passages[0].time)}</strong><span>{line.passages.slice(1).map((passage) => formatNext(passage.time)).join(" · ") || "Prochain départ"}</span></div></li>)}</ul>
+      {unavailableLines.length > 0 && <p className="metro-unavailable">Temps réel indisponible : {unavailableLines.map((line) => line.label).join(" · ")}</p>}
     </section>
-    <p className="metro-note"><span /> {transit?.updatedAt ? `Temps réel · ${new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(new Date(transit.updatedAt))}` : "Chargement des passages"}</p>
+    <p className="metro-note"><span /> {transit?.updatedAt ? `Mis à jour à ${new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(new Date(transit.updatedAt))}` : "Chargement des passages"}</p>
     <nav className="app-nav five" aria-label="Navigation principale"><button onClick={onLists}>🛒 <span>Listes</span></button><button onClick={onCreche}>🧒 <span>Crèche</span></button><button onClick={onWeather}>☁ <span>Météo</span></button><button onClick={onMeals}>🍽 <span>Repas</span></button><button className="active">Ⓜ <span>Métro</span></button></nav>
   </div>;
 }
