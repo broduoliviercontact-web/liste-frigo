@@ -17,8 +17,8 @@ const CACHE_MS = 10 * 60 * 1000;
 
 const favorites: TransitFavorite[] = [
   { id: "m5", label: "5", mode: "metro", lineRef: "C01375", stopRefs: ["22014", "463002"], stop: "Raymond Queneau" },
-  { id: "145", label: "145", mode: "bus", lineRef: "C01170", stopRefs: ["22337", "491921"], stop: "Église de Pantin - Métro" },
-  { id: "147", label: "147", mode: "bus", lineRef: "C01172", stopRefs: ["22337", "30119"], stop: "Église de Pantin - Métro" },
+  { id: "145", label: "145", mode: "bus", lineRef: "C01170", stopRefs: ["16934", "37427"], stop: "Raymond Queneau - Métro" },
+  { id: "147", label: "147", mode: "bus", lineRef: "C01172", stopRefs: ["16934", "37427"], stop: "Raymond Queneau - Métro" },
   { id: "245", label: "245", mode: "bus", lineRef: "C02713", stopRefs: ["22337"], stop: "Église de Pantin - Métro" },
   { id: "318", label: "318", mode: "bus", lineRef: "C01281", stopRefs: ["25960", "37676"], stop: "Pantin - Raymond Queneau" },
   { id: "330", label: "330", mode: "bus", lineRef: "C01289", stopRefs: ["492451", "22568"], stop: "Hoche - Métro" },
