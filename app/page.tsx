@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type Item = { id: number; label: string; checked: boolean };
 type ShoppingList = { id: number; name: string; items: Item[] };
@@ -416,6 +416,8 @@ export default function Home() {
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
   const [view, setView] = useState<"lists" | "creche" | "meteo" | "meals" | "metro">("lists");
   const [access, setAccess] = useState<"checking" | "denied" | "granted">("checking");
+  const listRevision = useRef(0);
+  const mutationInFlight = useRef(false);
 
   useEffect(() => {
     void fetch("/api/access", { cache: "no-store" })
@@ -425,11 +427,14 @@ export default function Home() {
   }, []);
 
   const loadLists = useCallback(async (quiet = false) => {
+    if (mutationInFlight.current) return;
+    const requestRevision = listRevision.current;
     if (!quiet) setSyncState("loading");
     try {
       const response = await fetch("/api/lists", { cache: "no-store" });
       if (!response.ok) throw new Error("sync");
       const data = await response.json() as { lists: ShoppingList[] };
+      if (requestRevision !== listRevision.current || mutationInFlight.current) return;
       setLists(data.lists);
       setCurrentListId((current) => data.lists.some((list) => list.id === current) ? current : data.lists[0]?.id ?? 0);
       setSyncState("synced");
@@ -444,6 +449,9 @@ export default function Home() {
   }, [access, loadLists]);
 
   async function mutate(action: Record<string, unknown>) {
+    if (mutationInFlight.current) return null;
+    mutationInFlight.current = true;
+    listRevision.current += 1;
     setSyncState("loading");
     try {
       const response = await fetch("/api/lists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(action) });
@@ -451,6 +459,7 @@ export default function Home() {
       const data = await response.json() as { lists: ShoppingList[] };
       setLists(data.lists); setSyncState("synced"); return data.lists;
     } catch { setSyncState("error"); return null; }
+    finally { mutationInFlight.current = false; }
   }
 
   const currentList = lists.find((list) => list.id === currentListId) ?? lists[0];
@@ -544,6 +553,7 @@ export default function Home() {
                 <button
                   className="item-button"
                   onClick={() => toggle(item.id)}
+                  aria-pressed={item.checked}
                   aria-label={`${item.checked ? "Décocher" : "Cocher"} ${item.label}`}
                 >
                   <span className="checkbox" aria-hidden="true">
@@ -631,6 +641,7 @@ export default function Home() {
                     <button
                       className="item-button"
                       onClick={() => toggle(item.id)}
+                      aria-pressed={item.checked}
                       aria-label={`${item.checked ? "Décocher" : "Cocher"} ${item.label}`}
                     >
                       <span className="checkbox" aria-hidden="true">{item.checked ? "✓" : ""}</span>
