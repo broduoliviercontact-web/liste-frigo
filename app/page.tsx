@@ -357,11 +357,24 @@ function MetroPage({ onLists, onCreche, onWeather, onMeals }: { onLists: () => v
     const minutes = minutesUntil(time);
     return minutes === 0 ? "À quai" : `${minutes} min`;
   };
+  const directionsFor = (line: TransitLine) => Object.values(line.passages.reduce<Record<string, TransitLine["passages"]>>((directions, passage) => {
+    const destination = passage.destination || line.direction || line.stop;
+    (directions[destination] ??= []).push(passage);
+    return directions;
+  }, {})).sort((a, b) => Date.parse(a[0]?.time ?? "") - Date.parse(b[0]?.time ?? ""));
 
   return <div className="metro-page">
     <header className="metro-header"><div><p className="eyebrow">DÉPLACEMENTS SUPERVIE</p><h1>Raymond Queneau</h1><span>Station métro · Bus</span></div><span className="metro-symbol" aria-hidden="true">M</span></header>
     <section className="metro-departures" aria-label="Prochains passages"><header><p className="eyebrow">DÉPARTS À VENIR</p><strong>{activeLines.length ? `${activeLines.length} lignes en direct` : "Mise à jour en cours"}</strong></header>
-      <ul>{activeLines.map((line) => <li key={line.id}><b className={line.mode === "metro" ? "metro-badge" : ""}>{line.label}</b><div><p>{line.passages[0]?.destination || line.direction || line.stop}</p><strong>{formatNext(line.passages[0].time)}</strong><span>{line.passages.slice(1).map((passage) => formatNext(passage.time)).join(" · ") || "Prochain départ"}</span></div></li>)}</ul>
+      <ul>{activeLines.map((line) => {
+        const directions = directionsFor(line);
+        return <li key={line.id} className="metro-line"><b className={line.mode === "metro" ? "metro-badge" : ""}>{line.label}</b><div className="metro-directions">
+          {directions.slice(0, 2).map((passages) => <section key={`${line.id}-${passages[0].destination}`} className="metro-direction">
+            <p>{passages[0].destination || line.stop}</p>
+            <div className="metro-times"><strong>{formatNext(passages[0].time)}</strong>{passages.slice(1, 2).map((passage) => <span key={passage.time}>{formatNext(passage.time)}</span>)}</div>
+          </section>)}
+        </div></li>;
+      })}</ul>
       {unavailableLines.length > 0 && <p className="metro-unavailable">Temps réel indisponible : {unavailableLines.map((line) => line.label).join(" · ")}</p>}
     </section>
     <p className="metro-note"><span /> {transit?.updatedAt ? `Mis à jour à ${new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(new Date(transit.updatedAt))}` : "Chargement des passages"}</p>
