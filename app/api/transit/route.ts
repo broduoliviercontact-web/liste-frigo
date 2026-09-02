@@ -12,7 +12,7 @@ type TransitFavorite = {
 
 type Passage = { time: string; destination: string };
 
-const PRIM_URL = "https://prim.iledefrance-mobilites.fr/marketplace/requete-ligne";
+const PRIM_URL = "https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring";
 const CACHE_MS = 10 * 60 * 1000;
 const FAILURE_CACHE_MS = 5 * 60 * 1000;
 
@@ -31,31 +31,41 @@ function textValue(value: unknown) {
   return Array.isArray(value) && typeof value[0]?.value === "string" ? value[0].value : "";
 }
 
+async function readStop(stopRef: string, favorite: TransitFavorite, apiKey: string): Promise<Passage[]> {
+  const url = new URL(PRIM_URL);
+  url.searchParams.set("MonitoringRef", `STIF:StopPoint:Q:${stopRef}:`);
+  url.searchParams.set("LineRef", `STIF:Line::${favorite.lineRef}:`);
+  const response = await fetch(url, {
+    headers: { Accept: "application/json", apikey: apiKey },
+    cf: { cacheEverything: true, cacheTtl: 600 },
+  } as RequestInit);
+  if (!response.ok) throw new Error(`PRIM HTTP ${response.status}`);
+
+  const data = await response.json() as {
+    Siri?: { ServiceDelivery?: { StopMonitoringDelivery?: Array<{ MonitoredStopVisit?: Array<Record<string, unknown>> }> } };
+  };
+  const visits = data.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0]?.MonitoredStopVisit ?? [];
+  return visits.flatMap((visit) => {
+    const journey = visit.MonitoredVehicleJourney as Record<string, unknown> | undefined;
+    if (!journey) return [];
+    const destination = textValue(journey.DestinationName) || textValue(journey.DirectionName);
+    if (favorite.direction && !destination.toLocaleLowerCase("fr").includes(favorite.direction.toLocaleLowerCase("fr"))) return [];
+    const call = journey.MonitoredCall as Record<string, unknown> | undefined;
+    const time = typeof call?.ExpectedDepartureTime === "string"
+      ? call.ExpectedDepartureTime
+      : typeof call?.ExpectedArrivalTime === "string"
+        ? call.ExpectedArrivalTime
+        : "";
+    return time ? [{ time, destination }] : [];
+  });
+}
+
 async function readLine(favorite: TransitFavorite, apiKey: string): Promise<TransitResult> {
   try {
-    const url = new URL(PRIM_URL);
-    url.searchParams.set("LineRef", `STIF:Line::${favorite.lineRef}:`);
-    const response = await fetch(url, {
-      headers: { Accept: "application/json", apikey: apiKey },
-      cf: { cacheEverything: true, cacheTtl: 600 },
-    } as RequestInit);
-    if (!response.ok) throw new Error(`PRIM HTTP ${response.status}`);
-    const data = await response.json() as {
-      Siri?: { ServiceDelivery?: { EstimatedTimetableDelivery?: Array<{ EstimatedJourneyVersionFrame?: Array<{ EstimatedVehicleJourney?: Array<Record<string, unknown>> }> }> } };
-    };
-    const journeys = data.Siri?.ServiceDelivery?.EstimatedTimetableDelivery?.[0]?.EstimatedJourneyVersionFrame?.[0]?.EstimatedVehicleJourney ?? [];
-    const wantedStops = new Set(favorite.stopRefs.map((stopRef) => `STIF:StopPoint:Q:${stopRef}:`));
+    const results = await Promise.all(favorite.stopRefs.map((stopRef) => readStop(stopRef, favorite, apiKey)));
+    const candidates = results.flat();
     const passageCountsByDestination = new Map<string, number>();
-    const passages = journeys.flatMap((journey) => {
-      const destination = textValue(journey.DestinationName) || textValue(journey.DirectionName);
-      if (favorite.direction && !destination.toLocaleLowerCase("fr").includes(favorite.direction.toLocaleLowerCase("fr"))) return [];
-      const calls = (journey.EstimatedCalls as { EstimatedCall?: Array<Record<string, unknown>> } | undefined)?.EstimatedCall ?? [];
-      return calls.flatMap((call) => {
-        const ref = (call.StopPointRef as { value?: string } | undefined)?.value;
-        const time = typeof call.ExpectedDepartureTime === "string" ? call.ExpectedDepartureTime : typeof call.ExpectedArrivalTime === "string" ? call.ExpectedArrivalTime : "";
-        return wantedStops.has(ref ?? "") && time ? [{ time, destination }] : [];
-      });
-    }).filter((passage) => Date.parse(passage.time) >= Date.now() - 60_000)
+    const passages = candidates.filter((passage) => Number.isFinite(Date.parse(passage.time)) && Date.parse(passage.time) >= Date.now() - 60_000)
       .sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
       .filter((passage, index, all) => index === 0 || passage.time !== all[index - 1].time || passage.destination !== all[index - 1].destination)
       // Keep room for both travel directions when one direction has frequent vehicles.

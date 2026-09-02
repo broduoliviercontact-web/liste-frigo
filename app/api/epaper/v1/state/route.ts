@@ -32,19 +32,25 @@ export async function GET(request: Request) {
         metro: {
           status: "ready",
           updatedAt: transit.updatedAt,
-          lines: transit.lines.map((line) => ({
-            label: line.label,
-            mode: line.mode,
-            stop: line.stop,
-            available: line.available,
-            directions: Object.values(line.passages.reduce<Record<string, { destination: string; minutes: number[] }>>((groups, passage) => {
+          lines: transit.lines.map((line) => {
+            const directions = Object.values(line.passages.reduce<Record<string, { destination: string; minutes: number[] }>>((groups, passage) => {
+              const departureAt = Date.parse(passage.time);
+              if (!Number.isFinite(departureAt)) return groups;
               const destination = passage.destination || line.direction || line.stop;
               const group = groups[destination] ?? { destination, minutes: [] };
-              group.minutes.push(Math.max(0, Math.round((Date.parse(passage.time) - Date.now()) / 60_000)));
+              group.minutes.push(Math.max(0, Math.round((departureAt - Date.now()) / 60_000)));
               groups[destination] = group;
               return groups;
-            }, {})).sort((a, b) => (a.minutes[0] ?? 999) - (b.minutes[0] ?? 999)).slice(0, 2),
-          })),
+            }, {})).filter((direction) => direction.minutes.length > 0)
+              .sort((a, b) => (a.minutes[0] ?? 999) - (b.minutes[0] ?? 999)).slice(0, 2);
+            return {
+              label: line.label,
+              mode: line.mode,
+              stop: line.stop,
+              available: line.available && directions.length > 0,
+              directions,
+            };
+          }),
         },
       },
     });
