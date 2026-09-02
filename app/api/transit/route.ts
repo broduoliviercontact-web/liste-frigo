@@ -24,8 +24,45 @@ const favorites: TransitFavorite[] = [
 ];
 
 type TransitResult = TransitFavorite & { available: boolean; passages: Passage[] };
+type TransitSnapshot = { updatedAt: string; lines: TransitResult[]; checkedAt: number };
 let cached: { expiresAt: number; updatedAt: string; lines: TransitResult[] } | null = null;
 let lastSuccessful: { updatedAt: string; lines: TransitResult[] } | null = null;
+let schemaReady: Promise<void> | null = null;
+
+async function ensureTransitSchema() {
+  if (schemaReady) return schemaReady;
+  const setup = (async () => {
+    const { env } = await import("cloudflare:workers");
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS transit_snapshots (cache_key TEXT PRIMARY KEY, updated_at TEXT NOT NULL, checked_at INTEGER NOT NULL, payload TEXT NOT NULL)").run();
+  })();
+  schemaReady = setup;
+  try {
+    await setup;
+  } catch (error) {
+    schemaReady = null;
+    throw error;
+  }
+}
+
+async function readSnapshot(): Promise<TransitSnapshot | null> {
+  await ensureTransitSchema();
+  const { env } = await import("cloudflare:workers");
+  const row = await env.DB.prepare("SELECT updated_at, checked_at, payload FROM transit_snapshots WHERE cache_key = ?").bind("raymond-queneau").first<{ updated_at: string; checked_at: number; payload: string }>();
+  if (!row) return null;
+  try {
+    const lines = JSON.parse(row.payload) as TransitResult[];
+    return Array.isArray(lines) ? { updatedAt: row.updated_at, checkedAt: row.checked_at, lines } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveSnapshot(updatedAt: string, lines: TransitResult[]) {
+  await ensureTransitSchema();
+  const { env } = await import("cloudflare:workers");
+  await env.DB.prepare("INSERT INTO transit_snapshots (cache_key, updated_at, checked_at, payload) VALUES (?, ?, ?, ?) ON CONFLICT(cache_key) DO UPDATE SET updated_at = excluded.updated_at, checked_at = excluded.checked_at, payload = excluded.payload")
+    .bind("raymond-queneau", updatedAt, Date.now(), JSON.stringify(lines)).run();
+}
 
 function textValue(value: unknown) {
   return Array.isArray(value) && typeof value[0]?.value === "string" ? value[0].value : "";
@@ -84,14 +121,23 @@ async function readLine(favorite: TransitFavorite, apiKey: string): Promise<Tran
 
 export async function readTransit() {
   if (cached && cached.expiresAt > Date.now()) return { updatedAt: cached.updatedAt, lines: cached.lines };
+  const snapshot = await readSnapshot();
+  if (snapshot && snapshot.checkedAt + CACHE_MS > Date.now()) {
+    cached = { expiresAt: snapshot.checkedAt + CACHE_MS, updatedAt: snapshot.updatedAt, lines: snapshot.lines };
+    return { updatedAt: snapshot.updatedAt, lines: snapshot.lines };
+  }
   const { env } = await import("cloudflare:workers");
   const apiKey = typeof env.IDFM_PRIM_API_KEY === "string" ? env.IDFM_PRIM_API_KEY : "";
-  if (!apiKey) return { updatedAt: new Date().toISOString(), lines: favorites.map((line) => ({ ...line, available: false, passages: [] })) };
+  if (!apiKey) return snapshot ?? { updatedAt: new Date().toISOString(), lines: favorites.map((line) => ({ ...line, available: false, passages: [] })) };
   const lines = await Promise.all(favorites.map((line) => readLine(line, apiKey)));
   const updatedAt = new Date().toISOString();
   if (lines.some((line) => line.available)) {
     lastSuccessful = { updatedAt, lines };
+    await saveSnapshot(updatedAt, lines);
     cached = { expiresAt: Date.now() + CACHE_MS, updatedAt, lines };
+  } else if (snapshot) {
+    await saveSnapshot(snapshot.updatedAt, snapshot.lines);
+    cached = { expiresAt: Date.now() + FAILURE_CACHE_MS, updatedAt: snapshot.updatedAt, lines: snapshot.lines };
   } else if (lastSuccessful) {
     cached = { expiresAt: Date.now() + FAILURE_CACHE_MS, ...lastSuccessful };
   } else {
