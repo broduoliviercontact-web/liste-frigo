@@ -72,6 +72,7 @@ async function readStop(stopRef: string, favorite: TransitFavorite, apiKey: stri
   const url = new URL(PRIM_URL);
   url.searchParams.set("MonitoringRef", `STIF:StopPoint:Q:${stopRef}:`);
   url.searchParams.set("LineRef", `STIF:Line::${favorite.lineRef}:`);
+  url.searchParams.set("MaximumStopVisits", "3");
   const response = await fetch(url, {
     headers: { Accept: "application/json", apikey: apiKey },
     cf: { cacheEverything: true, cacheTtl: 600 },
