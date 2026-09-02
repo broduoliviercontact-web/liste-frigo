@@ -371,7 +371,7 @@ function MetroPage({ onLists, onCreche, onWeather, onMeals }: { onLists: () => v
         return <li key={line.id} className="metro-line"><b className={line.mode === "metro" ? "metro-badge" : ""}>{line.label}</b><div className="metro-directions">
           {directions.slice(0, 2).map((passages) => <section key={`${line.id}-${passages[0].destination}`} className="metro-direction">
             <p>{passages[0].destination || line.stop}</p>
-            <div className="metro-times"><strong>{formatNext(passages[0].time)}</strong>{passages.slice(1, 2).map((passage) => <span key={passage.time}>{formatNext(passage.time)}</span>)}</div>
+            <div className="metro-times"><strong>{formatNext(passages[0].time)}</strong>{passages.slice(1, 3).map((passage) => <span key={passage.time}>{formatNext(passage.time)}</span>)}</div>
           </section>)}
         </div></li>;
       })}</ul>
