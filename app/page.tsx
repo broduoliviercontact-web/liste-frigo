@@ -51,7 +51,7 @@ const epaperTabs = tabCatalog.filter((tab) => tab.epaper);
 const MAX_EPAPER_TABS = epaperTabs.length;
 
 const defaultEpaperSettings: EpaperSettings = {
-  visibleTabs: ["lists", "iss", "air", "meteo", "metro"],
+  visibleTabs: ["lists", "creche", "meteo", "meals", "metro", "iss", "air"],
   activeTab: "lists",
   carouselEnabled: false,
   carouselIntervalSeconds: 120,

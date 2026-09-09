@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       display: { logicalWidth: 540, logicalHeight: 960, orientation: "portrait" },
       activeTab: "listes",
       epaperSettings: {
-        visibleTabs: ["listes", "iss", "air", "meteo", "metro"],
+        visibleTabs: ["listes", "creche", "meteo", "repas", "metro", "iss", "air"],
         activeTab: "listes",
         preferredTab: "listes",
         carousel: { enabled: false, intervalSeconds: 120 },
