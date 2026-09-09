@@ -222,10 +222,14 @@ function radarBearingFor(plane: { x: number; y: number }) {
 
 const RADAR_SWEEP_MS = 10_000;
 
-function radarRevealDelayMs(plane: { x: number; y: number }) {
-  const targetPhaseMs = radarBearingFor(plane) / 360 * RADAR_SWEEP_MS;
-  const currentPhaseMs = Date.now() % RADAR_SWEEP_MS;
-  return Math.round((targetPhaseMs - currentPhaseMs + RADAR_SWEEP_MS) % RADAR_SWEEP_MS);
+function radarSweepAngle(startedAt: number, now = Date.now()) {
+  return ((now - startedAt) % RADAR_SWEEP_MS) / RADAR_SWEEP_MS * 360;
+}
+
+function didSweepPass(previousAngle: number, currentAngle: number, targetAngle: number) {
+  return previousAngle <= currentAngle
+    ? targetAngle > previousAngle && targetAngle <= currentAngle
+    : targetAngle > previousAngle || targetAngle <= currentAngle;
 }
 
 function sameAirTrafficPlane(a?: AirTrafficPlane, b?: AirTrafficPlane) {
@@ -689,8 +693,9 @@ function AirPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
   const [displayedAircraft, setDisplayedAircraft] = useState<AirTrafficPlane[]>([]);
   const [revealedAt, setRevealedAt] = useState<Record<string, number>>({});
   const [selectedAircraftId, setSelectedAircraftId] = useState("");
-  const revealTimers = useRef<number[]>([]);
+  const pendingAircraftRef = useRef<Map<string, AirTrafficPlane>>(new Map());
   const displayedAircraftRef = useRef<AirTrafficPlane[]>([]);
+  const radarStartedAt = useRef(Date.now());
   const aircraft = displayedAircraft.length ? displayedAircraft : targetAircraft;
   const selectedAircraft = aircraft.find((plane) => plane.id === selectedAircraftId) ?? aircraft[0];
 
@@ -700,8 +705,6 @@ function AirPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
 
   useEffect(() => {
     if (!targetAircraft.length) return;
-    revealTimers.current.forEach((timer) => window.clearTimeout(timer));
-    revealTimers.current = [];
 
     const current = displayedAircraftRef.current;
     if (!current.length) {
@@ -711,28 +714,58 @@ function AirPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
       return;
     }
 
+    const targetIds = new Set(targetAircraft.map((plane) => plane.id));
     targetAircraft.forEach((plane) => {
       const previous = current.find((candidate) => candidate.id === plane.id);
       if (sameAirTrafficPlane(previous, plane)) return;
-      const timer = window.setTimeout(() => {
+      pendingAircraftRef.current.set(plane.id, plane);
+    });
+    for (const id of pendingAircraftRef.current.keys()) {
+      if (!targetIds.has(id)) pendingAircraftRef.current.delete(id);
+    }
+    setDisplayedAircraft((currentVisible) => currentVisible.filter((plane) => targetIds.has(plane.id)));
+  }, [targetAircraft]);
+
+  useEffect(() => {
+    let animationFrame = 0;
+    let previousSweepAngle = radarSweepAngle(radarStartedAt.current);
+
+    const revealPendingAircraft = () => {
+      const currentSweepAngle = radarSweepAngle(radarStartedAt.current);
+      const revealedPlanes: AirTrafficPlane[] = [];
+
+      pendingAircraftRef.current.forEach((plane, id) => {
+        if (!didSweepPass(previousSweepAngle, currentSweepAngle, radarBearingFor(plane))) return;
+        pendingAircraftRef.current.delete(id);
+        revealedPlanes.push(plane);
+      });
+
+      if (revealedPlanes.length) {
+        const now = Date.now();
         setDisplayedAircraft((visible) => {
-          const next = visible.filter((candidate) => targetAircraft.some((target) => target.id === candidate.id));
-          const index = next.findIndex((candidate) => candidate.id === plane.id);
-          if (index >= 0) next[index] = plane;
-          else next.push(plane);
+          const next = [...visible];
+          revealedPlanes.forEach((plane) => {
+            const index = next.findIndex((candidate) => candidate.id === plane.id);
+            if (index >= 0) next[index] = plane;
+            else next.push(plane);
+          });
           return next;
         });
-        setRevealedAt((currentReveals) => ({ ...currentReveals, [plane.id]: Date.now() }));
-      }, radarRevealDelayMs(plane));
-      revealTimers.current.push(timer);
-    });
-    setDisplayedAircraft((currentVisible) => currentVisible.filter((plane) => targetAircraft.some((target) => target.id === plane.id)));
+        setRevealedAt((currentReveals) => ({
+          ...currentReveals,
+          ...Object.fromEntries(revealedPlanes.map((plane) => [plane.id, now])),
+        }));
+      }
 
-    return () => {
-      revealTimers.current.forEach((timer) => window.clearTimeout(timer));
-      revealTimers.current = [];
+      previousSweepAngle = currentSweepAngle;
+      animationFrame = window.requestAnimationFrame(revealPendingAircraft);
     };
-  }, [targetAircraft]);
+
+    animationFrame = window.requestAnimationFrame(revealPendingAircraft);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, []);
 
   useEffect(() => {
     if (!aircraft.length) return;
