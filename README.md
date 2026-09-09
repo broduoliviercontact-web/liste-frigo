@@ -17,7 +17,7 @@ Fonctionnalites disponibles:
 - Onglet Metro: prochains passages a Raymond Queneau pour metro 5 et bus 145/147/318.
 - Onglet Agenda: prototype "Semaine compacte" avec 7 jours et 2 evenements maximum par jour.
 - Onglet ISS: position orbitale calculee a partir de TLE CelesTrak avec carte monde.
-- Onglet Air: radar mocke autour de Pantin pour tester l'ergonomie.
+- Onglet Air: simulation radar autour de Pantin, partagee par le site et l'API e-paper.
 - Onglet Reglages: configuration locale des onglets visibles, onglet actif et carrousel.
 - API e-paper agregee: `/api/epaper/v1/state`.
 
@@ -157,9 +157,10 @@ Les reglages sont stockes dans `localStorage` sous `supervie-epaper-settings`. I
 
 `Air`
 
-- Mock cote web dans `app/page.tsx`.
-- Mock cote e-paper dans `/api/epaper/v1/state`.
-- Sert surtout a tester radar, selection et densite visuelle.
+- Source commune: `/api/air`.
+- Simulation dynamique recalculee toutes les 10 secondes.
+- Le site et `/api/epaper/v1/state` lisent maintenant la meme source, donc les avions, positions et metadonnees doivent rester alignes.
+- Sert surtout a tester radar, selection et densite visuelle en attendant une vraie source ADS-B.
 - A remplacer par une vraie source ADS-B si besoin.
 
 `Reglages`
@@ -235,7 +236,7 @@ La route agrege en parallele:
 - repas de la semaine,
 - transports,
 - ISS,
-- air mocke.
+- air simule via `/api/air`.
 
 Elle renvoie un snapshot JSON avec:
 
@@ -386,7 +387,7 @@ Priorite moyenne:
 
 - Rendre les reglages e-paper persistants cote serveur au lieu du seul `localStorage`.
 - Ajouter une page statut technique: derniere synchro, batterie, Wi-Fi, version firmware.
-- Remplacer le radar Air mocke par une vraie source ADS-B ou garder explicitement le mock.
+- Remplacer la simulation Air par une vraie source ADS-B si l'onglet devient un outil temps reel.
 - Ajouter des tests d'API pour les actions listes/repas.
 
 Dette technique:

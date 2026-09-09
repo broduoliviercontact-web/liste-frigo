@@ -35,6 +35,30 @@ type EpaperWeather = {
 };
 
 type TransitLine = { id: string; label: string; mode: "metro" | "bus"; stop: string; direction?: string; available: boolean; passages: Array<{ time: string; destination: string }> };
+type AirTrafficPlane = {
+  id: string;
+  callsign: string;
+  registration: string;
+  tailNumber: string;
+  airline: string;
+  aircraftType: string;
+  route: string;
+  bearing: string;
+  x: number;
+  y: number;
+  heading: number;
+  altitudeM: number;
+  speedKmh: number;
+  distanceKm: number;
+  flightLevel: string;
+};
+type AirTrafficState = {
+  status: "ready" | "unavailable";
+  updatedAt?: string;
+  radiusKm?: number;
+  scan?: { refreshSeconds: number; mode: "simulation" };
+  aircraft: AirTrafficPlane[];
+};
 
 const tabCatalog: Array<{ id: TabId; label: string; icon: string; epaperKey: string; epaper: boolean }> = [
   { id: "lists", label: "Listes", icon: "🛒", epaperKey: "listes", epaper: true },
@@ -165,6 +189,29 @@ function useTransit() {
   }, []);
 
   return transit;
+}
+
+function useAirTraffic() {
+  const [airTraffic, setAirTraffic] = useState<AirTrafficState>({ status: "unavailable", aircraft: [] });
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/air?at=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("air");
+        const data = await response.json() as AirTrafficState;
+        if (active) setAirTraffic(data);
+      } catch {
+        if (active) setAirTraffic((current) => ({ ...current, status: "unavailable" }));
+      }
+    };
+    void load();
+    const timer = window.setInterval(load, 10_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+
+  return airTraffic;
 }
 
 const initialItems: Item[] = [
@@ -612,31 +659,31 @@ function IssPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
   </div>;
 }
 
-const aircraft = [
-  { id: "AFR76P", registration: "F-GZNP", airline: "Air France", aircraft: "Boeing 777", route: "CDG → Montréal", x: 58, y: 38, angle: 45, altitude: "11 300 m", flightLevel: "FL371", speed: "812 km/h", bearing: "NE", distance: "31 km" },
-  { id: "RYR32HA", registration: "EI-EKD", airline: "Ryanair", aircraft: "Boeing 737", route: "Beauvais → Porto", x: 47, y: 56, angle: 95, altitude: "7 900 m", flightLevel: "FL259", speed: "692 km/h", bearing: "E", distance: "8 km" },
-  { id: "EJU49KT", registration: "OE-IJZ", airline: "easyJet", aircraft: "Airbus A320", route: "CDG → Toulouse", x: 73, y: 66, angle: 210, altitude: "5 200 m", flightLevel: "FL171", speed: "468 km/h", bearing: "SW", distance: "27 km" },
-  { id: "TVF1QD", registration: "F-HTVC", airline: "Transavia", aircraft: "Boeing 737", route: "Orly → Lisbonne", x: 35, y: 76, angle: 310, altitude: "9 600 m", flightLevel: "FL315", speed: "744 km/h", bearing: "NW", distance: "24 km" },
-  { id: "BAW8SG", registration: "G-EUUT", airline: "British Airways", aircraft: "Airbus A320", route: "Londres → Genève", x: 82, y: 43, angle: 130, altitude: "10 800 m", flightLevel: "FL354", speed: "785 km/h", bearing: "SE", distance: "34 km" },
-  { id: "DAH108S", registration: "7T-VKE", airline: "Air Algérie", aircraft: "Boeing 737", route: "CDG → Alger", x: 54, y: 50, angle: 20, altitude: "3 400 m", flightLevel: "FL112", speed: "421 km/h", bearing: "N", distance: "4 km" },
-  { id: "DLH7MC", registration: "D-AIWI", airline: "Lufthansa", aircraft: "Airbus A320", route: "Francfort → Paris", x: 21, y: 34, angle: 70, altitude: "8 800 m", flightLevel: "FL289", speed: "706 km/h", bearing: "E", distance: "38 km" },
-  { id: "VLG42Z", registration: "EC-MHA", airline: "Vueling", aircraft: "Airbus A321", route: "Paris → Barcelone", x: 88, y: 25, angle: 165, altitude: "6 600 m", flightLevel: "FL217", speed: "512 km/h", bearing: "S", distance: "48 km" },
-  { id: "TRA9KL", registration: "PH-HXN", airline: "Transavia", aircraft: "Boeing 737", route: "Rotterdam → Orly", x: 18, y: 58, angle: 250, altitude: "4 100 m", flightLevel: "FL135", speed: "386 km/h", bearing: "W", distance: "33 km" },
-  { id: "KLM88R", registration: "PH-BXN", airline: "KLM", aircraft: "Boeing 737", route: "Paris → Amsterdam", x: 69, y: 88, angle: 20, altitude: "12 000 m", flightLevel: "FL394", speed: "834 km/h", bearing: "N", distance: "41 km" },
-];
-
 function AirPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: TabId) => void }) {
-  const [selectedAircraftId, setSelectedAircraftId] = useState(aircraft[0].id);
+  const airTraffic = useAirTraffic();
+  const aircraft = airTraffic.aircraft;
+  const [selectedAircraftId, setSelectedAircraftId] = useState("");
   const selectedAircraft = aircraft.find((plane) => plane.id === selectedAircraftId) ?? aircraft[0];
+
+  useEffect(() => {
+    if (!aircraft.length) return;
+    if (!aircraft.some((plane) => plane.id === selectedAircraftId)) setSelectedAircraftId(aircraft[0].id);
+  }, [aircraft, selectedAircraftId]);
 
   const scanDelayFor = (plane: { x: number; y: number }) => {
     const sweepDurationSeconds = 10;
-    const bearingFromCenter = (Math.atan2(plane.x - 50, 50 - plane.y) * 180 / Math.PI + 360) % 360;
+    const bearingFromCenter = (Math.atan2(plane.x - 128, 128 - plane.y) * 180 / Math.PI + 360) % 360;
     return `${(bearingFromCenter / 360 * sweepDurationSeconds).toFixed(3)}s`;
   };
 
+  const formatMeters = (value?: number) => typeof value === "number" ? `${new Intl.NumberFormat("fr-FR").format(value)} m` : "--";
+  const formatSpeed = (value?: number) => typeof value === "number" ? `${value} km/h` : "--";
+  const updatedAt = airTraffic.updatedAt
+    ? new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(airTraffic.updatedAt))
+    : "--:--";
+
   return <div className="air-page">
-    <header className="radar-header"><div><p className="eyebrow">TRAFIC AÉRIEN</p><h1>Air</h1></div><strong>80 km</strong></header>
+    <header className="radar-header"><div><p className="eyebrow">TRAFIC AÉRIEN · SIMULATION</p><h1>Air</h1></div><strong>{airTraffic.radiusKm ?? 80} km</strong></header>
     <section className="radar-screen" aria-label="Radar aérien">
       <div className="scan-meta"><span>LFPG/LFPB</span><span>{aircraft.length} cibles</span></div>
       <svg className="local-map" viewBox="-20 -20 140 140" preserveAspectRatio="none" aria-hidden="true">
@@ -716,32 +763,32 @@ function AirPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
       <span className="gps-dot" aria-label="Notre position"><i /></span>
       <span className="radar-sweep" aria-hidden="true" />
       {aircraft.map((plane) => <button
-        className={`plane-target${selectedAircraft.id === plane.id ? " selected" : ""}`}
+        className={`plane-target${selectedAircraft?.id === plane.id ? " selected" : ""}`}
         key={plane.id}
         onClick={() => setSelectedAircraftId(plane.id)}
-        style={{ left: `${plane.x}%`, top: `${plane.y}%`, "--heading": `${plane.angle}deg`, "--scan-delay": scanDelayFor(plane) } as CSSProperties}
-        aria-label={`${plane.id}, ${plane.airline}, ${plane.altitude}, à ${plane.distance}`}
+        style={{ left: `${plane.x / 255 * 100}%`, top: `${plane.y / 255 * 100}%`, "--heading": `${plane.heading}deg`, "--scan-delay": scanDelayFor(plane) } as CSSProperties}
+        aria-label={`${plane.id}, ${plane.airline}, ${formatMeters(plane.altitudeM)}, à ${plane.distanceKm} km`}
       >
         <span className="plane-vector" aria-hidden="true"><i className="plane-trail" /><i className="plane-symbol" /></span>
         <span className="plane-label"><b>{plane.id}</b><small>{plane.flightLevel}</small></span>
       </button>)}
     </section>
-    <section className="air-details" aria-live="polite" aria-label="Détails de l'avion sélectionné">
-      <header><div><strong>{selectedAircraft.id}</strong><span>{selectedAircraft.registration}</span></div><b>{selectedAircraft.bearing} · {selectedAircraft.distance}</b></header>
-      <p>{selectedAircraft.airline} · {selectedAircraft.aircraft} · {selectedAircraft.route}</p>
-      <dl><div><dt>Altitude</dt><dd>{selectedAircraft.altitude}</dd></div><div><dt>Vitesse</dt><dd>{selectedAircraft.speed}</dd></div></dl>
-    </section>
-    <p className="radar-status"><span /> Scan 10 s · traces passées mockées</p>
+    {selectedAircraft && <section className="air-details" aria-live="polite" aria-label="Détails de l'avion sélectionné">
+      <header><div><strong>{selectedAircraft.id}</strong><span>{selectedAircraft.tailNumber}</span></div><b>{selectedAircraft.bearing} · {selectedAircraft.distanceKm} km</b></header>
+      <p>{selectedAircraft.airline} · {selectedAircraft.aircraftType} · {selectedAircraft.route}</p>
+      <dl><div><dt>Altitude</dt><dd>{formatMeters(selectedAircraft.altitudeM)}</dd></div><div><dt>Vitesse</dt><dd>{formatSpeed(selectedAircraft.speedKmh)}</dd></div></dl>
+    </section>}
+    <p className={`radar-status ${airTraffic.status}`}><span /> Simulation · sync {updatedAt}</p>
     <section className="aircraft-list" aria-label="Avions détectés">
       <header><p className="eyebrow">Avions détectés</p><span>{aircraft.length}</span></header>
       {aircraft.map((plane) => <button
         key={plane.id}
-        className={selectedAircraft.id === plane.id ? "selected" : ""}
+        className={selectedAircraft?.id === plane.id ? "selected" : ""}
         onClick={() => setSelectedAircraftId(plane.id)}
-        aria-pressed={selectedAircraft.id === plane.id}
+        aria-pressed={selectedAircraft?.id === plane.id}
       >
         <span><strong>{plane.id}</strong><small>{plane.registration} · {plane.airline}</small></span>
-        <span><b>{plane.distance}</b><small>{plane.altitude} · {plane.speed}</small></span>
+        <span><b>{plane.distanceKm} km</b><small>{formatMeters(plane.altitudeM)} · {formatSpeed(plane.speedKmh)}</small></span>
       </button>)}
     </section>
     <AppNav active="air" settings={settings} onChange={onTab} />

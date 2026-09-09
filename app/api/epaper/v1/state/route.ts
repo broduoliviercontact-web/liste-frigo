@@ -4,12 +4,13 @@ import { readPantinWeather } from "../weather";
 import { readTransit } from "../../../transit/route";
 import { requireSupervieAccess } from "../../../../access";
 import { readIss } from "../../../iss/route";
+import { readAirTraffic } from "../../../air/route";
 
 export async function GET(request: Request) {
   try {
     const denied = await requireSupervieAccess(request);
     if (denied) return denied;
-    const [lists, weather, meals, transit, iss] = await Promise.all([
+    const [lists, weather, meals, transit, iss, air] = await Promise.all([
       readAll(),
       readPantinWeather(),
       readWeekMeals(),
@@ -22,6 +23,7 @@ export async function GET(request: Request) {
         latitude: null,
         longitude: null,
       })),
+      readAirTraffic(),
     ]);
     const requestedId = Number(new URL(request.url).searchParams.get("listId"));
     const selectedIndex = lists.findIndex((list) => list.id === requestedId);
@@ -85,17 +87,24 @@ export async function GET(request: Request) {
           track: iss.track ?? [],
         },
         air: {
-          status: "ready",
-          radiusKm: 25,
-          home: { label: "Nous", latitude: 48.895, longitude: 2.409 },
-          scan: { refreshSeconds: 10, mode: "mock" },
-          aircraft: [
-            { registration: "AFR76P", x: 146, y: 84, heading: 45, altitudeM: 11300, speedKmh: 812, past: [[48, 52], [53, 48], [58, 44]], future: [[62, 40], [67, 35], [72, 30]] },
-            { registration: "RYR32HA", x: 96, y: 130, heading: 95, altitudeM: 7900, speedKmh: 692, past: [[43, 56], [45, 56], [47, 56]], future: [[51, 56], [56, 57], [62, 59]] },
-            { registration: "EJU49KT", x: 176, y: 164, heading: 210, altitudeM: 5200, speedKmh: 468, past: [[77, 52], [73, 56], [69, 59]], future: [[63, 64], [58, 69], [52, 74]] },
-            { registration: "TVF1QD", x: 62, y: 190, heading: 310, altitudeM: 9600, speedKmh: 744, past: [[33, 76], [36, 72], [38, 70]], future: [[42, 66], [46, 62], [51, 57]] },
-            { registration: "BAW8SG", x: 210, y: 106, heading: 130, altitudeM: 10800, speedKmh: 785, past: [[64, 39], [68, 42], [71, 44]], future: [[75, 49], [80, 54], [85, 60]] },
-          ],
+          ...air,
+          aircraft: air.aircraft.map((plane) => ({
+            callsign: plane.callsign,
+            registration: plane.registration,
+            tailNumber: plane.tailNumber,
+            airline: plane.airline,
+            aircraftType: plane.aircraftType,
+            route: plane.route,
+            bearing: plane.bearing,
+            x: plane.x,
+            y: plane.y,
+            heading: plane.heading,
+            altitudeM: plane.altitudeM,
+            speedKmh: plane.speedKmh,
+            distanceKm: plane.distanceKm,
+            past: plane.past,
+            future: plane.future,
+          })),
         },
       },
     });
