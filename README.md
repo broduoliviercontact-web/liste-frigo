@@ -102,7 +102,7 @@ Le catalogue d'onglets est `tabCatalog`. Chaque entree contient:
 - `epaperKey`: cle envoyee au firmware.
 - `epaper`: indique si l'onglet peut apparaitre dans la navigation e-paper.
 
-La barre du bas est rendue par `AppNav`. Elle utilise `epaperSettings.visibleTabs`, limitee a `MAX_EPAPER_TABS = 7`, car le firmware e-paper ne peut pas afficher plus de 7 onglets lisibles sur 540 px.
+La barre du bas est rendue par `AppNav`. Elle utilise `epaperSettings.visibleTabs`, limitee a `MAX_EPAPER_TABS = 8`. Le style `tabs-8` compacte les libelles et les pictogrammes pour garder les 8 onglets lisibles sur 540 px.
 
 Les reglages sont stockes dans `localStorage` sous `supervie-epaper-settings`. Ils ne sont pas encore persistants cote serveur.
 
@@ -250,10 +250,11 @@ Elle renvoie un snapshot JSON avec:
 - `pages.meteo`
 - `pages.repas`
 - `pages.metro`
+- `pages.agenda`
 - `pages.iss`
 - `pages.air`
 
-Attention: au moment de ce README, `/api/epaper/v1/state` renvoie encore `visibleTabs: ["listes", "creche", "meteo", "repas", "metro", "iss", "air"]`. L'onglet web `agenda` n'est pas encore ajoute au contrat firmware. Pour le porter sur l'e-paper, il faudra mettre a jour cette route, puis le firmware.
+`/api/epaper/v1/state` renvoie maintenant les 8 onglets visibles par defaut: `["listes", "creche", "meteo", "repas", "metro", "agenda", "iss", "air"]`.
 
 ## Base de donnees
 

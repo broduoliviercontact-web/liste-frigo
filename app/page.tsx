@@ -11,6 +11,7 @@ type EpaperSettings = {
   activeTab: TabId;
   carouselEnabled: boolean;
   carouselIntervalSeconds: number;
+  configVersion: number;
 };
 type IssState = {
   status: "ready" | "unavailable";
@@ -73,13 +74,14 @@ const tabCatalog: Array<{ id: TabId; label: string; icon: string; epaperKey: str
 ];
 
 const epaperTabs = tabCatalog.filter((tab) => tab.epaper);
-const MAX_EPAPER_TABS = 7;
+const MAX_EPAPER_TABS = 8;
 
 const defaultEpaperSettings: EpaperSettings = {
-  visibleTabs: ["lists", "creche", "meteo", "meals", "metro", "agenda", "iss"],
+  visibleTabs: ["lists", "creche", "meteo", "meals", "metro", "agenda", "iss", "air"],
   activeTab: "agenda",
   carouselEnabled: false,
   carouselIntervalSeconds: 120,
+  configVersion: 2,
 };
 
 function epaperKeyFor(tab: TabId) {
@@ -934,15 +936,18 @@ export default function Home() {
       const visibleTabs = Array.isArray(parsed.visibleTabs)
         ? parsed.visibleTabs.filter((tab): tab is TabId => epaperTabs.some((entry) => entry.id === tab)).slice(0, MAX_EPAPER_TABS)
         : defaultEpaperSettings.visibleTabs;
-      const migratedTabs = visibleTabs.includes("agenda")
+      const migratedTabs = parsed.configVersion === defaultEpaperSettings.configVersion
         ? visibleTabs
-        : [...visibleTabs.filter((tab) => tab !== "air"), "agenda"].slice(0, MAX_EPAPER_TABS);
+        : defaultEpaperSettings.visibleTabs.reduce<TabId[]>((tabs, tab) => (
+          tabs.includes(tab) || tabs.length >= MAX_EPAPER_TABS ? tabs : [...tabs, tab]
+        ), visibleTabs).slice(0, MAX_EPAPER_TABS);
       const activeTab = epaperTabs.some((entry) => entry.id === parsed.activeTab) ? parsed.activeTab as TabId : defaultEpaperSettings.activeTab;
       setEpaperSettings({
         visibleTabs: migratedTabs.length ? migratedTabs : defaultEpaperSettings.visibleTabs,
         activeTab: migratedTabs.includes(activeTab) ? activeTab : "agenda",
         carouselEnabled: Boolean(parsed.carouselEnabled),
         carouselIntervalSeconds: Math.max(30, Number(parsed.carouselIntervalSeconds) || defaultEpaperSettings.carouselIntervalSeconds),
+        configVersion: defaultEpaperSettings.configVersion,
       });
       setView(migratedTabs.includes(activeTab) ? activeTab : "agenda");
     } catch {
@@ -959,6 +964,7 @@ export default function Home() {
         .filter((tab, index, all) => all.indexOf(tab) === index)
         .slice(0, MAX_EPAPER_TABS),
       carouselIntervalSeconds: Math.max(30, Number(next.carouselIntervalSeconds) || 120),
+      configVersion: defaultEpaperSettings.configVersion,
     };
     if (!normalized.visibleTabs.length) normalized.visibleTabs = ["lists"];
     if (!normalized.visibleTabs.includes(normalized.activeTab)) normalized.activeTab = normalized.visibleTabs[0] ?? "lists";

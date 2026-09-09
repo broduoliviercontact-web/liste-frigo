@@ -6,6 +6,16 @@ import { requireSupervieAccess } from "../../../../access";
 import { readIss } from "../../../iss/route";
 import { readAirTraffic } from "../../../air/route";
 
+const compactAgenda = [
+  { day: "Lun", date: "14", items: [{ time: "08:30", label: "Crèche" }, { time: "18:15", label: "Courses" }] },
+  { day: "Mar", date: "15", items: [{ time: "09:20", label: "Pédiatre" }] },
+  { day: "Mer", date: "16", items: [{ time: "10:00", label: "Parc" }, { time: "19:30", label: "Visio" }] },
+  { day: "Jeu", date: "17", items: [{ time: "17:00", label: "Nounou" }] },
+  { day: "Ven", date: "18", items: [{ time: "08:45", label: "Crèche" }, { time: "20:00", label: "Dîner" }] },
+  { day: "Sam", date: "19", items: [{ time: "11:00", label: "Marché" }] },
+  { day: "Dim", date: "20", items: [{ time: "", label: "Famille" }] },
+];
+
 export async function GET(request: Request) {
   try {
     const denied = await requireSupervieAccess(request);
@@ -38,7 +48,7 @@ export async function GET(request: Request) {
       display: { logicalWidth: 540, logicalHeight: 960, orientation: "portrait" },
       activeTab: "listes",
       epaperSettings: {
-        visibleTabs: ["listes", "creche", "meteo", "repas", "metro", "iss", "air"],
+        visibleTabs: ["listes", "creche", "meteo", "repas", "metro", "agenda", "iss", "air"],
         activeTab: "listes",
         preferredTab: "listes",
         carousel: { enabled: false, intervalSeconds: 120 },
@@ -51,6 +61,11 @@ export async function GET(request: Request) {
         },
         meteo: weather,
         repas: { status: "ready", ...meals },
+        agenda: {
+          status: "ready",
+          mode: "compact-week",
+          days: compactAgenda,
+        },
         metro: {
           status: "ready",
           updatedAt: transit.updatedAt,
