@@ -194,6 +194,29 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .weekly-meals-list p strong { display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
+.agenda-page { min-height: 0; height: 100%; display: flex; flex-direction: column; padding: 24px 26px 18px; overflow: hidden; }
+.agenda-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; padding-bottom: 15px; border-bottom: 3px solid #111; }
+.agenda-header h1 { max-width: 350px; font-size: 40px; line-height: .96; }
+.agenda-header > strong { display: grid; width: 52px; height: 52px; place-items: center; border: 3px solid #111; background: #111; color: #f8f7f1; font-size: 23px; line-height: 1; }
+.agenda-focus { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 15px 0; border-bottom: 3px solid #111; }
+.agenda-focus article { min-width: 0; min-height: 112px; border: 2px solid #111; background: #fff; padding: 11px; display: grid; align-content: space-between; }
+.agenda-focus span { font-size: 10px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
+.agenda-focus strong { font-size: 28px; line-height: 1; }
+.agenda-focus p { min-width: 0; margin: 0; overflow: hidden; font-size: 18px; font-weight: 900; line-height: 1.08; text-overflow: ellipsis; white-space: nowrap; }
+.compact-week { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; padding: 15px 0; border-bottom: 3px solid #111; }
+.compact-week article { min-width: 0; min-height: 0; border: 2px solid #111; background: #fff; display: grid; grid-template-rows: 72px 1fr; overflow: hidden; }
+.compact-week article.today { background: #111; color: #fff; }
+.compact-week header { display: grid; align-content: center; justify-items: center; gap: 5px; border-bottom: 2px solid currentColor; }
+.compact-week header span { font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.compact-week header strong { font-size: 25px; line-height: 1; }
+.compact-week article > div { display: grid; grid-template-rows: repeat(2, minmax(0, 1fr)); min-height: 0; }
+.compact-week p { min-width: 0; margin: 0; padding: 8px 5px; border-bottom: 1px solid currentColor; display: grid; align-content: start; gap: 4px; }
+.compact-week time { display: block; font-size: 9px; font-weight: 900; line-height: 1; }
+.compact-week p span { display: block; overflow: hidden; font-size: 11px; font-weight: 900; line-height: 1.08; overflow-wrap: anywhere; }
+.agenda-note { margin: 10px 0 0; text-align: center; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.agenda-note span { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border: 2px solid #111; background: #fff; }
+.agenda-page > .app-nav { margin-top: auto; }
+
 .creche-page { min-height: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; padding: 24px 26px 18px; }
 .creche-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 16px; border-bottom: 3px solid #111; }
 .weather-now { display: grid; grid-template-columns: auto auto; align-items: center; gap: 0 9px; text-align: right; }
@@ -510,6 +533,22 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
   .weekly-meals-list article { grid-template-columns: 82px 1fr 1fr; gap: 6px; padding: 5px 0; }
   .weekly-meals-list h3 { font-size: 12px; }
   .weekly-meals-list p { font-size: 9px; }
+  .agenda-page { padding: 16px 18px 10px; }
+  .agenda-header { padding-bottom: 10px; }
+  .agenda-header h1 { font-size: 32px; }
+  .agenda-header > strong { width: 44px; height: 44px; font-size: 19px; }
+  .agenda-focus { gap: 7px; padding: 10px 0; }
+  .agenda-focus article { min-height: 90px; padding: 8px; }
+  .agenda-focus strong { font-size: 23px; }
+  .agenda-focus p { font-size: 14px; }
+  .compact-week { gap: 3px; padding: 10px 0; }
+  .compact-week article { grid-template-rows: 58px 1fr; }
+  .compact-week header span { font-size: 8px; }
+  .compact-week header strong { font-size: 20px; }
+  .compact-week p { padding: 6px 3px; }
+  .compact-week time { font-size: 7px; }
+  .compact-week p span { font-size: 9px; line-height: 1.05; }
+  .agenda-note { margin-top: 7px; font-size: 7px; }
   .full-list-header { padding: 24px 18px 18px; }
   .full-list-header h2 { font-size: clamp(35px, 10vw, 45px); }
   .full-shopping-list { padding: 0 18px 24px; }

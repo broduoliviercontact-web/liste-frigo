@@ -5,7 +5,7 @@ import { CSSProperties, FormEvent, useCallback, useEffect, useRef, useState } fr
 type Item = { id: number; label: string; checked: boolean };
 type ShoppingList = { id: number; name: string; items: Item[] };
 type Meal = { id: number; date: string; moment: "midi" | "soir"; label: string };
-type TabId = "lists" | "creche" | "meteo" | "meals" | "metro" | "settings" | "iss" | "air";
+type TabId = "lists" | "creche" | "meteo" | "meals" | "metro" | "agenda" | "settings" | "iss" | "air";
 type EpaperSettings = {
   visibleTabs: TabId[];
   activeTab: TabId;
@@ -42,17 +42,18 @@ const tabCatalog: Array<{ id: TabId; label: string; icon: string; epaperKey: str
   { id: "meteo", label: "Météo", icon: "☁", epaperKey: "meteo", epaper: true },
   { id: "meals", label: "Repas", icon: "🍽", epaperKey: "repas", epaper: true },
   { id: "metro", label: "Métro", icon: "Ⓜ", epaperKey: "metro", epaper: true },
+  { id: "agenda", label: "Agenda", icon: "◷", epaperKey: "agenda", epaper: true },
   { id: "settings", label: "Réglages", icon: "⚙", epaperKey: "reglages", epaper: false },
   { id: "iss", label: "ISS", icon: "✦", epaperKey: "iss", epaper: true },
   { id: "air", label: "Air", icon: "⌖", epaperKey: "air", epaper: true },
 ];
 
 const epaperTabs = tabCatalog.filter((tab) => tab.epaper);
-const MAX_EPAPER_TABS = epaperTabs.length;
+const MAX_EPAPER_TABS = 7;
 
 const defaultEpaperSettings: EpaperSettings = {
-  visibleTabs: ["lists", "creche", "meteo", "meals", "metro", "iss", "air"],
-  activeTab: "lists",
+  visibleTabs: ["lists", "creche", "meteo", "meals", "metro", "agenda", "iss"],
+  activeTab: "agenda",
   carouselEnabled: false,
   carouselIntervalSeconds: 120,
 };
@@ -448,6 +449,53 @@ function MealPlannerPage({ settings, onTab }: { settings: EpaperSettings; onTab:
   </div>;
 }
 
+const compactWeekEvents = [
+  { day: "Lun", date: "14", items: [{ time: "08:30", label: "Crèche" }, { time: "18:15", label: "Courses" }] },
+  { day: "Mar", date: "15", items: [{ time: "09:20", label: "Pédiatre" }] },
+  { day: "Mer", date: "16", items: [{ time: "10:00", label: "Parc" }, { time: "19:30", label: "Visio" }] },
+  { day: "Jeu", date: "17", items: [{ time: "17:00", label: "Nounou" }] },
+  { day: "Ven", date: "18", items: [{ time: "08:45", label: "Crèche" }, { time: "20:00", label: "Dîner" }] },
+  { day: "Sam", date: "19", items: [{ time: "11:00", label: "Marché" }] },
+  { day: "Dim", date: "20", items: [{ time: "", label: "Famille" }] },
+];
+
+function AgendaPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: TabId) => void }) {
+  const today = compactWeekEvents[1];
+  const tomorrow = compactWeekEvents[2];
+  const eventCount = compactWeekEvents.reduce((total, day) => total + day.items.length, 0);
+
+  return <div className="agenda-page">
+    <header className="agenda-header">
+      <div><p className="eyebrow">SUPERVIE · AGENDA</p><h1>Semaine compacte</h1></div>
+      <strong>{eventCount}</strong>
+    </header>
+    <section className="agenda-focus" aria-label="Prochains moments">
+      <article>
+        <span>Aujourd&apos;hui</span>
+        <strong>{today.items[0].time}</strong>
+        <p>{today.items[0].label}</p>
+      </article>
+      <article>
+        <span>Demain</span>
+        <strong>{tomorrow.items[0].time}</strong>
+        <p>{tomorrow.items[0].label}</p>
+      </article>
+    </section>
+    <section className="compact-week" aria-label="Vue compacte de la semaine">
+      {compactWeekEvents.map((day, index) => <article key={day.day} className={index === 1 ? "today" : ""}>
+        <header><span>{day.day}</span><strong>{day.date}</strong></header>
+        <div>
+          {day.items.slice(0, 2).map((item) => <p key={`${day.day}-${item.time}-${item.label}`}>
+            {item.time && <time>{item.time}</time>}<span>{item.label}</span>
+          </p>)}
+        </div>
+      </article>)}
+    </section>
+    <p className="agenda-note"><span /> 2 lignes max par jour · pensée pour l&apos;e-paper</p>
+    <AppNav active="agenda" settings={settings} onChange={onTab} />
+  </div>;
+}
+
 function MetroPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: TabId) => void }) {
   const transit = useTransit();
   const referenceTime = Date.parse(transit?.updatedAt ?? "") || 0;
@@ -778,14 +826,17 @@ export default function Home() {
       const visibleTabs = Array.isArray(parsed.visibleTabs)
         ? parsed.visibleTabs.filter((tab): tab is TabId => epaperTabs.some((entry) => entry.id === tab)).slice(0, MAX_EPAPER_TABS)
         : defaultEpaperSettings.visibleTabs;
+      const migratedTabs = visibleTabs.includes("agenda")
+        ? visibleTabs
+        : [...visibleTabs.filter((tab) => tab !== "air"), "agenda"].slice(0, MAX_EPAPER_TABS);
       const activeTab = epaperTabs.some((entry) => entry.id === parsed.activeTab) ? parsed.activeTab as TabId : defaultEpaperSettings.activeTab;
       setEpaperSettings({
-        visibleTabs: visibleTabs.length ? visibleTabs : defaultEpaperSettings.visibleTabs,
-        activeTab,
+        visibleTabs: migratedTabs.length ? migratedTabs : defaultEpaperSettings.visibleTabs,
+        activeTab: migratedTabs.includes(activeTab) ? activeTab : "agenda",
         carouselEnabled: Boolean(parsed.carouselEnabled),
         carouselIntervalSeconds: Math.max(30, Number(parsed.carouselIntervalSeconds) || defaultEpaperSettings.carouselIntervalSeconds),
       });
-      setView(activeTab);
+      setView(migratedTabs.includes(activeTab) ? activeTab : "agenda");
     } catch {
       window.localStorage.removeItem("supervie-epaper-settings");
     }
@@ -923,7 +974,7 @@ export default function Home() {
     <main className="stage">
       <section className="device" aria-label="Aperçu de l'écran SUPERVIE">
         {view !== "settings" && <button className="site-settings-button" onClick={() => setView("settings")} aria-label="Réglages du site et de l'écran">⚙</button>}
-        {view === "creche" ? <CrechePage settings={epaperSettings} onTab={setVisibleView} /> : view === "meteo" ? <MeteoPage settings={epaperSettings} onTab={setVisibleView} /> : view === "meals" ? <MealPlannerPage settings={epaperSettings} onTab={setVisibleView} /> : view === "metro" ? <MetroPage settings={epaperSettings} onTab={setVisibleView} /> : view === "settings" ? <SettingsPage settings={epaperSettings} onSettings={updateEpaperSettings} onTab={setVisibleView} /> : view === "iss" ? <IssPage settings={epaperSettings} onTab={setVisibleView} /> : view === "air" ? <AirPage settings={epaperSettings} onTab={setVisibleView} /> : <>
+        {view === "creche" ? <CrechePage settings={epaperSettings} onTab={setVisibleView} /> : view === "meteo" ? <MeteoPage settings={epaperSettings} onTab={setVisibleView} /> : view === "meals" ? <MealPlannerPage settings={epaperSettings} onTab={setVisibleView} /> : view === "metro" ? <MetroPage settings={epaperSettings} onTab={setVisibleView} /> : view === "agenda" ? <AgendaPage settings={epaperSettings} onTab={setVisibleView} /> : view === "settings" ? <SettingsPage settings={epaperSettings} onSettings={updateEpaperSettings} onTab={setVisibleView} /> : view === "iss" ? <IssPage settings={epaperSettings} onTab={setVisibleView} /> : view === "air" ? <AirPage settings={epaperSettings} onTab={setVisibleView} /> : <>
         <header className="topbar">
           <div>
             <p className="eyebrow">SUPERVIE · LISTE PARTAGÉE</p>
