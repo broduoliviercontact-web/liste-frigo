@@ -107,6 +107,12 @@ function epaperKeyFor(tab: TabId) {
   return tabCatalog.find((entry) => entry.id === tab)?.epaperKey ?? "listes";
 }
 
+function tabFromQuery() {
+  if (typeof window === "undefined") return null;
+  const requestedView = new URLSearchParams(window.location.search).get("view");
+  return epaperTabs.some((entry) => entry.id === requestedView) ? requestedView as TabId : null;
+}
+
 function AppNav({ active, settings, onChange }: { active: TabId; settings: EpaperSettings; onChange: (tab: TabId) => void }) {
   const visibleTabs = (settings.visibleTabs.length ? settings.visibleTabs : defaultEpaperSettings.visibleTabs)
     .filter((tabId) => tabCatalog.find((tab) => tab.id === tabId)?.epaper);
@@ -1089,8 +1095,15 @@ export default function Home() {
   const mutationInFlight = useRef(false);
 
   useEffect(() => {
+    const requestedTab = tabFromQuery();
     const saved = window.localStorage.getItem("supervie-epaper-settings");
-    if (!saved) return;
+    if (!saved) {
+      if (requestedTab) {
+        setEpaperSettings((current) => ({ ...current, activeTab: requestedTab }));
+        setView(requestedTab);
+      }
+      return;
+    }
     try {
       const parsed = JSON.parse(saved) as Partial<EpaperSettings>;
       const visibleTabs = Array.isArray(parsed.visibleTabs)
@@ -1101,7 +1114,8 @@ export default function Home() {
         : defaultEpaperSettings.visibleTabs.reduce<TabId[]>((tabs, tab) => (
           tabs.includes(tab) || tabs.length >= MAX_EPAPER_TABS ? tabs : [...tabs, tab]
         ), visibleTabs).slice(0, MAX_EPAPER_TABS);
-      const activeTab = epaperTabs.some((entry) => entry.id === parsed.activeTab) ? parsed.activeTab as TabId : defaultEpaperSettings.activeTab;
+      const savedActiveTab = epaperTabs.some((entry) => entry.id === parsed.activeTab) ? parsed.activeTab as TabId : defaultEpaperSettings.activeTab;
+      const activeTab = requestedTab ?? savedActiveTab;
       setEpaperSettings({
         visibleTabs: migratedTabs.length ? migratedTabs : defaultEpaperSettings.visibleTabs,
         activeTab: migratedTabs.includes(activeTab) ? activeTab : "agenda",
@@ -1112,6 +1126,7 @@ export default function Home() {
       setView(migratedTabs.includes(activeTab) ? activeTab : "agenda");
     } catch {
       window.localStorage.removeItem("supervie-epaper-settings");
+      if (requestedTab) setView(requestedTab);
     }
   }, []);
 
