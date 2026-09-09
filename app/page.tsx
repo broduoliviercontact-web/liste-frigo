@@ -564,6 +564,7 @@ function AgendaPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab
   const [selectedDate, setSelectedDate] = useState("");
   const [draft, setDraft] = useState({ title: "", time: "", category: "famille", durationMinutes: "60" });
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingAgenda, setEditingAgenda] = useState(false);
   const [state, setState] = useState<"loading" | "ready" | "saving" | "error">("loading");
 
   const loadAgenda = useCallback(async () => {
@@ -646,7 +647,7 @@ function AgendaPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab
   return <div className="agenda-page">
     <header className="agenda-header">
       <div><p className="eyebrow">SUPERVIE · AGENDA</p><h1>Semaine compacte</h1></div>
-      <strong>{agenda?.eventCount ?? 0}</strong>
+      <div className="agenda-actions"><button onClick={() => setEditingAgenda(true)}>Modifier</button><strong>{agenda?.eventCount ?? 0}</strong></div>
     </header>
     <section className="agenda-focus" aria-label="Prochains moments">
       {(upcoming.length ? upcoming.slice(0, 2) : [null, null]).map((event, index) => <article key={event?.id ?? `empty-${index}`}>
@@ -654,29 +655,6 @@ function AgendaPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab
         <strong>{event?.time || "--:--"}</strong>
         <p>{event?.title ?? "À planifier"}</p>
       </article>)}
-    </section>
-    <section className="agenda-editor" aria-label="Edition agenda">
-      <div className="agenda-days">
-        {days.map((day) => <button key={day.date} className={day.date === selectedDay ? "active" : ""} onClick={() => setSelectedDate(day.date)}>
-          <small>{mealDayLabel(day.date, true)}</small><strong>{day.date.slice(-2)}</strong><i>{day.events.length || ""}</i>
-        </button>)}
-      </div>
-      <form className="agenda-form" onSubmit={saveEvent}>
-        <label><span>Titre</span><input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Pédiatre, crèche, courses..." maxLength={80} /></label>
-        <div>
-          <label><span>Heure</span><input type="time" value={draft.time} onChange={(event) => setDraft((current) => ({ ...current, time: event.target.value }))} /></label>
-          <label><span>Durée</span><input type="number" min="15" max="720" step="15" value={draft.durationMinutes} onChange={(event) => setDraft((current) => ({ ...current, durationMinutes: event.target.value }))} /></label>
-          <label><span>Catégorie</span><select value={draft.category} onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value }))}>{agendaCategoryOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
-        </div>
-        <button type="submit">{editingId ? "Modifier" : "Ajouter"}</button>
-        {editingId && <button type="button" onClick={resetDraft}>Annuler</button>}
-      </form>
-      <div className="agenda-day-list">
-        {selectedEvents.length ? selectedEvents.map((event) => <article key={event.id}>
-          <button type="button" onClick={() => editEvent(event)}><time>{event.time || "Jour"}</time><strong>{event.title}</strong><span>{agendaCategoryLabel(event.category)}</span></button>
-          <button type="button" onClick={() => void deleteEvent(event.id)} aria-label={`Supprimer ${event.title}`}>×</button>
-        </article>) : <p>Rien prévu ce jour.</p>}
-      </div>
     </section>
     <section className="compact-week" aria-label="Aperçu e-paper de la semaine">
       {days.map((day) => <article key={day.date} className={day.date === agenda?.today ? "today" : ""}>
@@ -690,6 +668,32 @@ function AgendaPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab
     </section>
     <p className={`agenda-note ${state}`}><span /> {state === "error" ? "Synchronisation indisponible" : state === "saving" ? "Enregistrement..." : "2 lignes max par jour · e-paper prêt"}</p>
     <AppNav active="agenda" settings={settings} onChange={onTab} />
+    {editingAgenda && <section className="agenda-editor-panel" aria-label="Edition agenda">
+      <header><div><p className="eyebrow">AGENDA</p><h2>Modifier la semaine</h2></div><button onClick={() => setEditingAgenda(false)} aria-label="Fermer l'éditeur">×</button></header>
+      <div className="agenda-editor">
+        <div className="agenda-days">
+          {days.map((day) => <button key={day.date} className={day.date === selectedDay ? "active" : ""} onClick={() => setSelectedDate(day.date)}>
+            <small>{mealDayLabel(day.date, true)}</small><strong>{day.date.slice(-2)}</strong><i>{day.events.length || ""}</i>
+          </button>)}
+        </div>
+        <form className="agenda-form" onSubmit={saveEvent}>
+          <label><span>Titre</span><input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Pédiatre, crèche, courses..." maxLength={80} /></label>
+          <div>
+            <label><span>Heure</span><input type="time" value={draft.time} onChange={(event) => setDraft((current) => ({ ...current, time: event.target.value }))} /></label>
+            <label><span>Durée</span><input type="number" min="15" max="720" step="15" value={draft.durationMinutes} onChange={(event) => setDraft((current) => ({ ...current, durationMinutes: event.target.value }))} /></label>
+            <label><span>Catégorie</span><select value={draft.category} onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value }))}>{agendaCategoryOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
+          </div>
+          <button type="submit">{editingId ? "Modifier" : "Ajouter"}</button>
+          {editingId && <button type="button" onClick={resetDraft}>Annuler</button>}
+        </form>
+        <div className="agenda-day-list">
+          {selectedEvents.length ? selectedEvents.map((event) => <article key={event.id}>
+            <button type="button" onClick={() => editEvent(event)}><time>{event.time || "Jour"}</time><strong>{event.title}</strong><span>{agendaCategoryLabel(event.category)}</span></button>
+            <button type="button" onClick={() => void deleteEvent(event.id)} aria-label={`Supprimer ${event.title}`}>×</button>
+          </article>) : <p>Rien prévu ce jour.</p>}
+        </div>
+      </div>
+    </section>}
   </div>;
 }
 
