@@ -305,7 +305,8 @@ function weatherDescription(weatherCode = 3) {
 }
 
 function hourLabel(time: string) {
-  return new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "numeric", hourCycle: "h23" }).format(new Date(time));
+  const parts = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "numeric", hourCycle: "h23" }).formatToParts(new Date(time));
+  return parts.find((part) => part.type === "hour")?.value ?? "--";
 }
 
 function MeteoPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: TabId) => void }) {
@@ -313,7 +314,7 @@ function MeteoPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab:
 
   const current = weather?.current;
   const today = weather?.today;
-  const hourly = (weather?.hourly ?? []).slice(0, 6);
+  const hourly = (weather?.hourly ?? []).slice(0, 12);
   return <div className="epaper-weather-page">
     <header className="epaper-weather-header">
       <p className="eyebrow">MÉTÉO SUPERVIE</p>
