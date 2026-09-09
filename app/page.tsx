@@ -214,6 +214,28 @@ function useAirTraffic() {
   return airTraffic;
 }
 
+function radarBearingFor(plane: { x: number; y: number }) {
+  return (Math.atan2(plane.x - 128, 128 - plane.y) * 180 / Math.PI + 360) % 360;
+}
+
+const RADAR_SWEEP_MS = 10_000;
+
+function radarRevealDelayMs(plane: { x: number; y: number }) {
+  const targetPhaseMs = radarBearingFor(plane) / 360 * RADAR_SWEEP_MS;
+  const currentPhaseMs = Date.now() % RADAR_SWEEP_MS;
+  return Math.round((targetPhaseMs - currentPhaseMs + RADAR_SWEEP_MS) % RADAR_SWEEP_MS);
+}
+
+function sameAirTrafficPlane(a?: AirTrafficPlane, b?: AirTrafficPlane) {
+  return Boolean(a && b) &&
+    a.x === b.x &&
+    a.y === b.y &&
+    a.heading === b.heading &&
+    a.altitudeM === b.altitudeM &&
+    a.speedKmh === b.speedKmh &&
+    a.distanceKm === b.distanceKm;
+}
+
 const initialItems: Item[] = [
   { id: 1, label: "Pain", checked: false },
   { id: 2, label: "Lait", checked: false },
@@ -661,20 +683,59 @@ function IssPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
 
 function AirPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: TabId) => void }) {
   const airTraffic = useAirTraffic();
-  const aircraft = airTraffic.aircraft;
+  const targetAircraft = airTraffic.aircraft;
+  const [displayedAircraft, setDisplayedAircraft] = useState<AirTrafficPlane[]>([]);
+  const [revealedAt, setRevealedAt] = useState<Record<string, number>>({});
   const [selectedAircraftId, setSelectedAircraftId] = useState("");
+  const revealTimers = useRef<number[]>([]);
+  const displayedAircraftRef = useRef<AirTrafficPlane[]>([]);
+  const aircraft = displayedAircraft.length ? displayedAircraft : targetAircraft;
   const selectedAircraft = aircraft.find((plane) => plane.id === selectedAircraftId) ?? aircraft[0];
+
+  useEffect(() => {
+    displayedAircraftRef.current = displayedAircraft;
+  }, [displayedAircraft]);
+
+  useEffect(() => {
+    if (!targetAircraft.length) return;
+    revealTimers.current.forEach((timer) => window.clearTimeout(timer));
+    revealTimers.current = [];
+
+    const current = displayedAircraftRef.current;
+    if (!current.length) {
+      const now = Date.now();
+      setDisplayedAircraft(targetAircraft);
+      setRevealedAt(Object.fromEntries(targetAircraft.map((plane) => [plane.id, now])));
+      return;
+    }
+
+    targetAircraft.forEach((plane) => {
+      const previous = current.find((candidate) => candidate.id === plane.id);
+      if (sameAirTrafficPlane(previous, plane)) return;
+      const timer = window.setTimeout(() => {
+        setDisplayedAircraft((visible) => {
+          const next = visible.filter((candidate) => targetAircraft.some((target) => target.id === candidate.id));
+          const index = next.findIndex((candidate) => candidate.id === plane.id);
+          if (index >= 0) next[index] = plane;
+          else next.push(plane);
+          return next;
+        });
+        setRevealedAt((currentReveals) => ({ ...currentReveals, [plane.id]: Date.now() }));
+      }, radarRevealDelayMs(plane));
+      revealTimers.current.push(timer);
+    });
+    setDisplayedAircraft((currentVisible) => currentVisible.filter((plane) => targetAircraft.some((target) => target.id === plane.id)));
+
+    return () => {
+      revealTimers.current.forEach((timer) => window.clearTimeout(timer));
+      revealTimers.current = [];
+    };
+  }, [targetAircraft]);
 
   useEffect(() => {
     if (!aircraft.length) return;
     if (!aircraft.some((plane) => plane.id === selectedAircraftId)) setSelectedAircraftId(aircraft[0].id);
   }, [aircraft, selectedAircraftId]);
-
-  const scanDelayFor = (plane: { x: number; y: number }) => {
-    const sweepDurationSeconds = 10;
-    const bearingFromCenter = (Math.atan2(plane.x - 128, 128 - plane.y) * 180 / Math.PI + 360) % 360;
-    return `${(bearingFromCenter / 360 * sweepDurationSeconds).toFixed(3)}s`;
-  };
 
   const formatMeters = (value?: number) => typeof value === "number" ? `${new Intl.NumberFormat("fr-FR").format(value)} m` : "--";
   const formatSpeed = (value?: number) => typeof value === "number" ? `${value} km/h` : "--";
@@ -764,9 +825,9 @@ function AirPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
       <span className="radar-sweep" aria-hidden="true" />
       {aircraft.map((plane) => <button
         className={`plane-target${selectedAircraft?.id === plane.id ? " selected" : ""}`}
-        key={plane.id}
+        key={`${plane.id}-${revealedAt[plane.id] ?? 0}`}
         onClick={() => setSelectedAircraftId(plane.id)}
-        style={{ left: `${plane.x / 255 * 100}%`, top: `${plane.y / 255 * 100}%`, "--heading": `${plane.heading}deg`, "--scan-delay": scanDelayFor(plane) } as CSSProperties}
+        style={{ left: `${plane.x / 255 * 100}%`, top: `${plane.y / 255 * 100}%`, "--heading": `${plane.heading}deg` } as CSSProperties}
         aria-label={`${plane.id}, ${plane.airline}, ${formatMeters(plane.altitudeM)}, à ${plane.distanceKm} km`}
       >
         <span className="plane-vector" aria-hidden="true"><i className="plane-trail" /><i className="plane-symbol" /></span>
