@@ -242,9 +242,9 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .compact-week { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; grid-template-rows: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 14px 0; border-bottom: 3px solid #111; }
 .compact-week article { min-width: 0; min-height: 0; border: 2px solid #111; background: #fff; display: grid; grid-template-columns: 82px minmax(0, 1fr); overflow: hidden; }
 .compact-week article.today { background: #111; color: #fff; }
-.compact-week header { display: grid; align-content: center; justify-items: center; gap: 4px; border-right: 2px solid currentColor; }
-.compact-week header span { font-size: 10px; font-weight: 900; text-transform: uppercase; }
-.compact-week header strong { font-size: 24px; line-height: 1; }
+.compact-week header { display: grid; align-content: center; justify-items: center; gap: 1px; padding: 2px 4px; border-right: 2px solid currentColor; }
+.compact-week header span { font-size: 9px; font-weight: 900; line-height: 1; text-transform: uppercase; }
+.compact-week header strong { font-size: 17px; line-height: 1; }
 .compact-week article > div { display: grid; grid-template-rows: repeat(2, minmax(0, 1fr)); min-height: 0; }
 .compact-week p { min-width: 0; margin: 0; padding: 5px 9px; border-bottom: 1px solid currentColor; display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: center; gap: 8px; }
 .compact-week time { display: block; font-size: 10px; font-weight: 900; line-height: 1; }
@@ -586,8 +586,9 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
   .agenda-editor { grid-template-columns: 76px minmax(0, 1fr) 126px; gap: 6px; }
   .compact-week { gap: 5px; padding: 10px 0; }
   .compact-week article { grid-template-columns: 62px minmax(0, 1fr); }
-  .compact-week header span { font-size: 8px; }
-  .compact-week header strong { font-size: 19px; }
+  .compact-week header { padding: 2px; }
+  .compact-week header span { font-size: 7px; }
+  .compact-week header strong { font-size: 14px; }
   .compact-week p { grid-template-columns: 40px minmax(0, 1fr); gap: 5px; padding: 4px 6px; }
   .compact-week time { font-size: 8px; }
   .compact-week p span { font-size: 11px; line-height: 1.05; }
