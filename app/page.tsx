@@ -860,11 +860,12 @@ function AirPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
       <span className="radar-sweep" aria-hidden="true" />
       {aircraft.map((plane) => <button
         className={`plane-target${selectedAircraft?.id === plane.id ? " selected" : ""}`}
-        key={`${plane.id}-${revealedAt[plane.id] ?? 0}`}
+        key={plane.id}
         onClick={() => setSelectedAircraftId(plane.id)}
         style={{ left: `${plane.x / 255 * 100}%`, top: `${plane.y / 255 * 100}%`, "--heading": `${plane.heading}deg` } as CSSProperties}
         aria-label={`${plane.id}, ${plane.airline}, ${formatMeters(plane.altitudeM)}, à ${plane.distanceKm} km`}
       >
+        <span className="plane-halo" key={revealedAt[plane.id] ?? 0} aria-hidden="true" />
         <span className="plane-vector" aria-hidden="true"><i className="plane-trail" /><i className="plane-symbol" /></span>
         <span className="plane-label"><b>{plane.id}</b><small>{plane.flightLevel}</small></span>
       </button>)}
