@@ -1,4 +1,4 @@
-import { acceptSupervieCode, hasSupervieAccess, supervieAccessCookie } from "../../access";
+import { acceptSupervieCode, hasSupervieAccess, supervieAccessCookie, supervieCookieOptions } from "../../access";
 
 export async function GET(request: Request) {
   return Response.json({ authorized: await hasSupervieAccess(request) });
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   return new Response(JSON.stringify({ authorized: true }), {
     headers: {
       "content-type": "application/json",
-      "set-cookie": `${supervieAccessCookie}${encodeURIComponent(code)}; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Strict`,
+      "set-cookie": `${supervieAccessCookie}${encodeURIComponent(code)}; ${supervieCookieOptions(request)}`,
     },
   });
 }

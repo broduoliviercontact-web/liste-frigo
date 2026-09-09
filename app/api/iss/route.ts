@@ -1,0 +1,95 @@
+import { requireSupervieAccess } from "../../access";
+import { degreesLat, degreesLong, eciToGeodetic, gstime, propagate, twoline2satrec } from "satellite.js";
+
+const TLE_URL = "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE";
+const TLE_CACHE_MS = 6 * 60 * 60 * 1000;
+const FALLBACK_TLE = [
+  "1 25544U 98067A   26251.98227461  .00013495  00000+0  25209-3 0  9997",
+  "2 25544  51.6292 245.3706 0004854 110.6068 249.5441 15.49061543584742",
+] as const;
+
+let tleCache: { lines: readonly [string, string]; expiresAt: number } | null = null;
+
+function describePosition(latitude: number, longitude: number) {
+  if (latitude < -60) return "Océan Austral";
+  if (latitude > 66) return "Région arctique";
+  if (longitude >= -70 && longitude <= 20) {
+    if (latitude >= 0) return "Océan Atlantique Nord";
+    return "Océan Atlantique Sud";
+  }
+  if (longitude > 20 && longitude < 115 && latitude < 25) return "Océan Indien";
+  if (longitude >= 115 || longitude < -70) {
+    if (latitude >= 0) return "Océan Pacifique Nord";
+    return "Océan Pacifique Sud";
+  }
+  if (latitude > 35 && longitude >= -10 && longitude <= 45) return "Europe";
+  if (latitude > 5 && longitude > 20 && longitude < 150) return "Asie";
+  if (latitude > -35 && longitude >= -20 && longitude <= 55) return "Afrique";
+  return "Au-dessus de la Terre";
+}
+
+async function readTle() {
+  if (tleCache && tleCache.expiresAt > Date.now()) return tleCache.lines;
+  try {
+    const response = await fetch(TLE_URL, {
+      headers: { Accept: "text/plain" },
+      cf: { cacheEverything: true, cacheTtl: 21_600 },
+    } as RequestInit);
+    if (!response.ok) throw new Error(`CelesTrak HTTP ${response.status}`);
+    const lines = (await response.text()).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const line1 = lines.find((line) => line.startsWith("1 25544"));
+    const line2 = lines.find((line) => line.startsWith("2 25544"));
+    if (!line1 || !line2) throw new Error("TLE ISS incomplet");
+    const tle = [line1, line2] as const;
+    tleCache = { lines: tle, expiresAt: Date.now() + TLE_CACHE_MS };
+    return tle;
+  } catch (error) {
+    console.error(`ISS TLE unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    return tleCache?.lines ?? FALLBACK_TLE;
+  }
+}
+
+function positionAt(line1: string, line2: string, date: Date) {
+  const satellite = twoline2satrec(line1, line2);
+  const propagated = propagate(satellite, date);
+  if (!propagated.position || !propagated.velocity) throw new Error("Calcul orbital ISS impossible");
+  const geodetic = eciToGeodetic(propagated.position, gstime(date));
+  const velocity = Math.hypot(propagated.velocity.x, propagated.velocity.y, propagated.velocity.z) * 3600;
+  return {
+    latitude: degreesLat(geodetic.latitude),
+    longitude: degreesLong(geodetic.longitude),
+    altitude: geodetic.height,
+    velocity,
+  };
+}
+
+export async function readIss() {
+  const [line1, line2] = await readTle();
+  const now = new Date();
+  const positions = Array.from({ length: 7 }, (_, index) => positionAt(line1, line2, new Date(now.getTime() + index * 6 * 60_000)));
+  const current = positions[0];
+
+  return {
+    status: "ready" as const,
+    updatedAt: now.toISOString(),
+    speedKmh: Math.round(current.velocity),
+    over: describePosition(current.latitude, current.longitude),
+    latitude: current.latitude,
+    longitude: current.longitude,
+    altitudeKm: Math.round(current.altitude),
+    track: positions.map((position) => ({ latitude: position.latitude, longitude: position.longitude })),
+  };
+}
+
+export async function GET(request: Request) {
+  const denied = await requireSupervieAccess(request);
+  if (denied) return denied;
+  try {
+    return Response.json(await readIss(), { headers: { "Cache-Control": "no-store, max-age=0" } });
+  } catch (error) {
+    return Response.json(
+      { status: "unavailable", error: error instanceof Error ? error.message : "ISS indisponible" },
+      { status: 503 },
+    );
+  }
+}

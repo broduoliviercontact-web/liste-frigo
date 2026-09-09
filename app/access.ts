@@ -3,7 +3,10 @@ const ACCESS_HEADER = "x-supervie-access-code";
 
 async function configuredAccessCode() {
   const { env } = await import("cloudflare:workers");
-  return typeof env.SUPERVIE_ACCESS_CODE === "string" ? env.SUPERVIE_ACCESS_CODE : "";
+  if (typeof env.SUPERVIE_ACCESS_CODE === "string" && env.SUPERVIE_ACCESS_CODE.length > 0) {
+    return env.SUPERVIE_ACCESS_CODE;
+  }
+  return process.env.NODE_ENV === "development" ? "supervie" : "";
 }
 
 function cookieValue(header: string | null, name: string) {
@@ -28,3 +31,8 @@ export async function acceptSupervieCode(code: string) {
 }
 
 export const supervieAccessCookie = `${ACCESS_COOKIE}=`;
+
+export function supervieCookieOptions(request: Request) {
+  const secure = new URL(request.url).protocol === "https:";
+  return `Path=/; Max-Age=2592000; HttpOnly; SameSite=Strict${secure ? "; Secure" : ""}`;
+}
