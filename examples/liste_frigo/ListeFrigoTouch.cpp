@@ -143,16 +143,25 @@ void ListeFrigoTouch::physicalToLogical(int16_t physical_x, int16_t physical_y, 
 
 NavTabId ListeFrigoTouch::detectNavTab(int16_t logical_x, int16_t logical_y)
 {
-    if (logical_x < 0 || logical_x >= LOGICAL_WIDTH || logical_y < 802 || logical_y >= 918) {
+    if (logical_x < NAV_LEFT || logical_x >= NAV_LEFT + NAV_WIDTH || logical_y < NAV_TOP || logical_y >= NAV_TOP + NAV_HEIGHT) {
         return TAB_NONE;
     }
 
-    int32_t index = logical_x / (LOGICAL_WIDTH / NAV_TAB_COUNT);
-    if (index < 0) {
-        index = 0;
-    } else if (index >= NAV_TAB_COUNT) {
-        index = NAV_TAB_COUNT - 1;
+    const int32_t available_width = NAV_WIDTH - (NAV_VISIBLE_TAB_MAX - 1) * NAV_GAP;
+    const int32_t item_width = available_width / NAV_VISIBLE_TAB_MAX;
+    const int32_t remainder = available_width % NAV_VISIBLE_TAB_MAX;
+    int32_t x = NAV_LEFT;
+    int8_t index = -1;
+    for (int8_t candidate = 0; candidate < NAV_VISIBLE_TAB_MAX; ++candidate) {
+        const int32_t width = item_width + (candidate < remainder ? 1 : 0);
+        if (logical_x >= x && logical_x < x + width) {
+            index = candidate;
+            break;
+        }
+        x += width + NAV_GAP;
     }
+    if (index < 0) return TAB_NONE;
 
-    return static_cast<NavTabId>(index);
+    static const NavTabId tabs[] = {TAB_LISTES, TAB_CRECHE, TAB_METEO, TAB_REPAS, TAB_METRO, TAB_ISS, TAB_AIR};
+    return tabs[index];
 }

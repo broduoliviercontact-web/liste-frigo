@@ -4,4 +4,7 @@
 // secrets.h is ignored by git; do not commit real credentials.
 #define WIFI_SSID "YOUR_WIFI_SSID"
 #define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
-#define EPAPER_BYPASS_TOKEN "YOUR_SITES_BYPASS_TOKEN"
+#define SUPERVIE_ACCESS_CODE "YOUR_SHARED_ACCESS_CODE"
+// Optional: use a distinct password for over-the-air firmware updates.
+// If omitted, SUPERVIE_ACCESS_CODE is used for the first OTA setup.
+#define SUPERVIE_OTA_PASSWORD "YOUR_OTA_PASSWORD"

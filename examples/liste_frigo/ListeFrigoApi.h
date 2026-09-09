@@ -27,6 +27,11 @@ public:
     bool takeListState(ListPageState &target);
     bool takeGeneratedAt(char *target, size_t target_size);
     bool takeWeatherState(WeatherState &target);
+    bool takeMealWeekState(MealWeekState &target);
+    bool takeMetroState(MetroState &target);
+    bool takeEpaperSettings(EpaperSettings &target);
+    bool takeIssState(IssState &target);
+    bool takeAirState(AirState &target);
     bool getCachedListState(int32_t list_id, ListPageState &target) const;
     bool sendToggleItem(int32_t item_id, bool checked);
     bool sendSelectList(int32_t list_id);
@@ -37,7 +42,9 @@ public:
                      const char *active_tab, uint32_t list_count, uint32_t item_count,
                      const ListPageState *list_state, const ListPageState *list_cache,
                      int8_t list_cache_count, const char *generated_at,
-                     const WeatherState *weather_state);
+                     const WeatherState *weather_state, const MealWeekState *meal_week_state,
+                     const MetroState *metro_state, const EpaperSettings *settings,
+                     const IssState *iss_state, const AirState *air_state);
     void finishToggle(bool success, int http_code, size_t bytes, const char *message,
                       RequestKind kind, int32_t item_id, bool checked, uint32_t generation);
     void mergePendingToggles(ListPageState &remote_state);
@@ -89,12 +96,22 @@ private:
     uint32_t result_item_count = 0;
     ListPageState result_list_state = {};
     WeatherState result_weather_state = {};
+    MealWeekState result_meal_week_state = {};
+    MetroState result_metro_state = {};
+    EpaperSettings result_epaper_settings = {};
+    IssState result_iss_state = {};
+    AirState result_air_state = {};
     ListPageState cached_list_states[LIST_COUNT_MAX] = {};
     int8_t cached_list_count = 0;
     bool result_has_list_state = false;
     volatile bool list_state_available = false;
     volatile bool generated_at_available = false;
     volatile bool weather_state_available = false;
+    volatile bool meal_week_state_available = false;
+    volatile bool metro_state_available = false;
+    volatile bool epaper_settings_available = false;
+    volatile bool iss_state_available = false;
+    volatile bool air_state_available = false;
 
     void startFetch();
     void startToggle();

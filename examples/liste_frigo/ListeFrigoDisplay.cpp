@@ -1,12 +1,28 @@
 #include "ListeFrigoDisplay.h"
 #include "ListeFrigoCesarAvatar.h"
+#include "ListeFrigoWorldMap.h"
 
 namespace {
 
 constexpr uint8_t BLACK = 0x00;
 constexpr uint8_t DARK = 0x33;
+constexpr uint8_t MID = 0x88;
 constexpr uint8_t LIGHT = 0xDD;
 constexpr uint8_t WHITE = 0xFF;
+constexpr int32_t AIR_RADAR_CX = LOGICAL_WIDTH / 2;
+constexpr int32_t AIR_RADAR_CY = 414;
+constexpr int32_t AIR_RADAR_RADIUS = 246;
+constexpr Rect_t AIR_RADAR_AREA = {8, 126, LOGICAL_WIDTH - 16, 568};
+
+constexpr NavTabId DEFAULT_VISIBLE_TABS[NAV_VISIBLE_TAB_MAX] = {
+    TAB_LISTES,
+    TAB_CRECHE,
+    TAB_METEO,
+    TAB_REPAS,
+    TAB_METRO,
+    TAB_ISS,
+    TAB_AIR,
+};
 
 const uint8_t GLYPH_SPACE[7] = {
     0b00000,
@@ -61,6 +77,7 @@ const Glyph FONT[] = {
     {'8', {0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110}},
     {'9', {0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100}},
     {'-', {0b00000, 0b00000, 0b00000, 0b11111, 0b00000, 0b00000, 0b00000}},
+    {'+', {0b00000, 0b00100, 0b00100, 0b11111, 0b00100, 0b00100, 0b00000}},
     {':', {0b00000, 0b00100, 0b00100, 0b00000, 0b00100, 0b00100, 0b00000}},
     {'/', {0b00001, 0b00010, 0b00010, 0b00100, 0b01000, 0b01000, 0b10000}},
     {'>', {0b10000, 0b01000, 0b00100, 0b00010, 0b00100, 0b01000, 0b10000}},
@@ -177,9 +194,47 @@ void ListeFrigoDisplay::setWeatherTime(uint8_t hour, uint8_t minute, bool valid)
     weather_time_valid = valid;
 }
 
+void ListeFrigoDisplay::setMealTime(uint8_t day_index, uint8_t hour, bool valid)
+{
+    meal_day_index = day_index % 7;
+    meal_hour = hour;
+    meal_time_valid = valid;
+}
+
 void ListeFrigoDisplay::setWeatherState(const WeatherState &state)
 {
     weather_state = state;
+}
+
+void ListeFrigoDisplay::setMealWeekState(const MealWeekState &state)
+{
+    meal_week_state = state;
+}
+
+void ListeFrigoDisplay::setMetroState(const MetroState &state)
+{
+    metro_state = state;
+}
+
+void ListeFrigoDisplay::setEpaperSettings(const EpaperSettings &settings)
+{
+    epaper_settings = settings;
+}
+
+void ListeFrigoDisplay::setIssState(const IssState &state)
+{
+    iss_state = state;
+}
+
+void ListeFrigoDisplay::setAirState(const AirState &state)
+{
+    air_state = state;
+    if (selected_aircraft >= air_state.aircraft_count) selected_aircraft = -1;
+}
+
+void ListeFrigoDisplay::setSelectedAircraft(int8_t index)
+{
+    selected_aircraft = index >= 0 && index < air_state.aircraft_count ? index : -1;
 }
 
 void ListeFrigoDisplay::showPage(NavTabId tab, bool clear_panel, const ListPageState *list_state)
@@ -300,6 +355,26 @@ void ListeFrigoDisplay::drawPage(NavTabId tab, const ListPageState *list_state)
     }
     if (tab == TAB_CRECHE) {
         drawCrechePage();
+        return;
+    }
+    if (tab == TAB_REPAS) {
+        drawMealsPage();
+        return;
+    }
+    if (tab == TAB_METRO) {
+        drawMetroPage();
+        return;
+    }
+    if (tab == TAB_REGLAGES) {
+        drawSettingsPage();
+        return;
+    }
+    if (tab == TAB_ISS) {
+        drawIssPage();
+        return;
+    }
+    if (tab == TAB_AIR) {
+        drawAirPage();
         return;
     }
 
@@ -486,12 +561,334 @@ void ListeFrigoDisplay::drawCrechePage()
     const int16_t return_weather_code = weather_state.return_forecast.available ? weather_state.return_forecast.weather_code
         : (weather_state.available ? weather_state.today_weather_code : 1);
     const bool return_is_day = weather_state.return_forecast.available ? weather_state.return_forecast.is_day : true;
-    drawWeatherIcon(294, 672, return_weather_code, return_is_day, BLACK, 2);
+    drawCrecheWeatherIcon(306, 666, return_weather_code, return_is_day, BLACK);
     drawText(374, 680, weatherLabel(return_weather_code), 2, BLACK);
     drawText(374, 716, "Gilet leger", 2, DARK);
     fillRect(32, 770, LOGICAL_WIDTH - 64, 4, BLACK);
     drawCenteredText(804, "CESAR A LA CRECHE", 2, DARK);
     drawPrimaryNavBar(TAB_CRECHE);
+}
+
+void ListeFrigoDisplay::drawMealsPage()
+{
+    static const char *days[] = {"LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI", "SAMEDI", "DIMANCHE"};
+    drawText(52, 34, "REPAS", 3, DARK);
+    drawText(52, 74, "TOUTE LA SEMAINE", 4, BLACK);
+    fillRect(32, 116, LOGICAL_WIDTH - 64, 4, BLACK);
+
+    constexpr int32_t grid_x = 32;
+    constexpr int32_t grid_y = 142;
+    constexpr int32_t grid_w = LOGICAL_WIDTH - 64;
+    constexpr int32_t cell_w = grid_w / 2;
+    constexpr int32_t cell_h = 154;
+    constexpr int32_t grid_h = cell_h * 4;
+
+    int8_t first_slot = 0;
+    if (meal_time_valid) {
+        first_slot = static_cast<int8_t>(meal_day_index) * 2;
+        if (meal_hour >= 21) first_slot += 2;
+        else if (meal_hour >= 14) first_slot += 1;
+    }
+
+    drawRect(grid_x, grid_y, grid_w, grid_h, 3, BLACK);
+    fillRect(grid_x + cell_w, grid_y, 3, grid_h, BLACK);
+    for (int8_t row = 1; row < 4; ++row) {
+        fillRect(grid_x, grid_y + row * cell_h, grid_w, 3, BLACK);
+    }
+
+    for (int8_t day = 0; day < 7; ++day) {
+        const int32_t x = grid_x + (day % 2) * cell_w + 12;
+        const int32_t y = grid_y + (day / 2) * cell_h + 12;
+        const int8_t lunch_slot = day * 2;
+        const int8_t dinner_slot = lunch_slot + 1;
+        const bool hide_lunch = meal_time_valid && lunch_slot < first_slot;
+        const bool hide_dinner = meal_time_valid && dinner_slot < first_slot;
+        const char *lunch = "-";
+        const char *dinner = "-";
+        for (int8_t meal = 0; meal < meal_week_state.meal_count; ++meal) {
+            const WeekMeal &entry = meal_week_state.meals[meal];
+            if (entry.day_index != day) continue;
+            if (entry.lunch && !hide_lunch) lunch = entry.label;
+            else if (!entry.lunch && !hide_dinner) dinner = entry.label;
+        }
+
+        drawText(x, y, days[day], 1, BLACK);
+        drawText(x + 1, y, days[day], 1, BLACK);
+        drawText(x, y + 30, "MIDI", 1, DARK);
+        drawTextLimited(x, y + 46, lunch, 1, BLACK, cell_w - 28);
+        drawText(x, y + 84, "SOIR", 1, DARK);
+        drawTextLimited(x, y + 100, dinner, 1, BLACK, cell_w - 28);
+    }
+    fillRect(220, 796, 10, 10, BLACK);
+    drawText(244, 796, "REPAS SYNCHRONISES", 1, BLACK);
+    drawPrimaryNavBar(TAB_REPAS);
+}
+
+void ListeFrigoDisplay::drawMetroPage()
+{
+    drawText(52, 34, "DEPLACEMENTS", 3, DARK);
+    drawText(52, 74, "RAYMOND QUENEAU", 4, BLACK);
+    drawRect(440, 36, 42, 42, 3, BLACK);
+    drawText(452, 47, "M", 3, BLACK);
+    fillRect(32, 116, LOGICAL_WIDTH - 64, 4, BLACK);
+    drawText(52, 142, "PROCHAINS PASSAGES", 2, DARK);
+    fillRect(52, 168, 436, 2, BLACK);
+
+    int8_t displayed = 0;
+    constexpr int8_t visible_rows = 4;
+    for (int8_t index = 0; index < metro_state.line_count && displayed < visible_rows; ++index) {
+        const MetroLine &line = metro_state.lines[index];
+        if (!line.available || line.direction_count == 0) continue;
+        const int32_t y = 184 + displayed * 154;
+        drawRect(52, y + 34, 68, 54, 3, BLACK);
+        if (line.metro) {
+            fillRect(55, y + 37, 62, 48, BLACK);
+            drawText(76, y + 51, line.label, 3, WHITE);
+        } else {
+            drawText(58 + (58 - textWidth(line.label, 3)) / 2, y + 51, line.label, 3, BLACK);
+        }
+
+        const MetroDirection &first = line.directions[0];
+        drawTextLimited(140, y + 2, first.destination, 2, DARK, 332);
+        char first_main[16] = {0};
+        snprintf(first_main, sizeof(first_main), first.minutes[0] == 0 ? "A QUAI" : "%d MIN", first.minutes[0]);
+        drawText(140, y + 28, first_main, 3, BLACK);
+        if (first.passage_count > 1) {
+            char first_next[14] = {0};
+            snprintf(first_next, sizeof(first_next), "%d MIN", first.minutes[1]);
+            const int32_t first_next_x = 150 + textWidth(first_main, 3);
+            drawText(first_next_x, y + 34, first_next, 2, DARK);
+            if (first.passage_count > 2) {
+                char first_third[14] = {0};
+                snprintf(first_third, sizeof(first_third), "%d MIN", first.minutes[2]);
+                drawText(first_next_x + textWidth(first_next, 2) + 12, y + 34, first_third, 2, DARK);
+            }
+        }
+        fillRect(140, y + 58, 348, 1, LIGHT);
+        if (line.direction_count > 1) {
+            const MetroDirection &second = line.directions[1];
+            drawTextLimited(140, y + 70, second.destination, 2, DARK, 332);
+            char second_main[16] = {0};
+            snprintf(second_main, sizeof(second_main), second.minutes[0] == 0 ? "A QUAI" : "%d MIN", second.minutes[0]);
+            drawText(140, y + 96, second_main, 3, BLACK);
+            if (second.passage_count > 1) {
+                char second_next[14] = {0};
+                snprintf(second_next, sizeof(second_next), "%d MIN", second.minutes[1]);
+                const int32_t second_next_x = 150 + textWidth(second_main, 3);
+                drawText(second_next_x, y + 102, second_next, 2, DARK);
+                if (second.passage_count > 2) {
+                    char second_third[14] = {0};
+                    snprintf(second_third, sizeof(second_third), "%d MIN", second.minutes[2]);
+                    drawText(second_next_x + textWidth(second_next, 2) + 12, y + 102, second_third, 2, DARK);
+                }
+            }
+        } else {
+            drawText(140, y + 84, "Autre sens indisponible", 2, LIGHT);
+        }
+        fillRect(52, y + 134, 436, 2, BLACK);
+        ++displayed;
+    }
+
+    if (displayed == 0) {
+        drawCenteredText(360, "Donnees metro en attente", 3, DARK);
+    }
+    drawPrimaryNavBar(TAB_METRO);
+}
+
+void ListeFrigoDisplay::drawSettingsPage()
+{
+    drawText(52, 34, "EPAPER", 3, DARK);
+    drawText(52, 74, "REGLAGES", 5, BLACK);
+    fillRect(32, 126, LOGICAL_WIDTH - 64, 4, BLACK);
+
+    drawText(52, 162, "Onglet au demarrage", 2, DARK);
+    drawText(52, 198, navSerialName(epaper_settings.preferred_tab == TAB_NONE ? TAB_LISTES : epaper_settings.preferred_tab), 5, BLACK);
+
+    fillRect(52, 276, 436, 2, BLACK);
+    drawText(52, 308, "Onglets visibles", 2, DARK);
+    const NavTabId *tabs = epaper_settings.visible_tab_count > 0 ? epaper_settings.visible_tabs : DEFAULT_VISIBLE_TABS;
+    const int8_t count = epaper_settings.visible_tab_count > 0 ? epaper_settings.visible_tab_count : NAV_VISIBLE_TAB_MAX;
+    for (int8_t i = 0; i < count && i < NAV_VISIBLE_TAB_MAX; ++i) {
+        const int32_t x = 52 + (i % 2) * 214;
+        const int32_t y = 350 + (i / 2) * 70;
+        drawRect(x, y, 182, 48, 3, BLACK);
+        drawText(x + 16, y + 15, navAsciiName(tabs[i]), 2, BLACK);
+    }
+
+    fillRect(52, 562, 436, 2, BLACK);
+    drawText(52, 594, "Carrousel", 2, DARK);
+    drawText(52, 630, epaper_settings.carousel_enabled ? "ACTIVE" : "ARRETE", 5, BLACK);
+    char interval[32] = {0};
+    snprintf(interval, sizeof(interval), "toutes %u sec", epaper_settings.carousel_interval_seconds);
+    drawText(52, 696, interval, 3, DARK);
+    drawText(52, 768, "A modifier sur le site", 2, DARK);
+    drawPrimaryNavBar(TAB_REGLAGES);
+}
+
+void ListeFrigoDisplay::drawWorldMapMini(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t gray)
+{
+    fillRect(x, y, w, h, DARK);
+    for (int8_t column = 1; column < 4; ++column) {
+        drawIconLine(x + column * w / 4, y, x + column * w / 4, y + h - 1, MID, 1);
+    }
+    for (int8_t row = 1; row < 4; ++row) {
+        drawIconLine(x, y + row * h / 4, x + w - 1, y + row * h / 4, MID, 1);
+    }
+    for (const WorldCoastline &coastline : WORLD_COASTLINES) {
+        for (uint16_t index = 1; index < coastline.count; ++index) {
+            const uint8_t *from = coastline.points[index - 1];
+            const uint8_t *to = coastline.points[index];
+            drawIconLine(x + from[0] * (w - 1) / 255, y + from[1] * (h - 1) / 255,
+                         x + to[0] * (w - 1) / 255, y + to[1] * (h - 1) / 255, LIGHT, 1);
+        }
+    }
+    drawRect(x, y, w, h, 3, gray);
+}
+
+void ListeFrigoDisplay::drawIssPage()
+{
+    drawText(52, 34, "ISS TRACKER", 4, BLACK);
+    fillRect(32, 92, LOGICAL_WIDTH - 64, 4, BLACK);
+    char speed_label[32] = {0};
+    if (iss_state.available && iss_state.speed_kmh > 0) snprintf(speed_label, sizeof(speed_label), "%u km/h", iss_state.speed_kmh);
+    else strlcpy(speed_label, "-- km/h", sizeof(speed_label));
+    drawText(52, 118, "Vitesse", 2, DARK);
+    drawText(170, 112, speed_label, 4, BLACK);
+    drawText(52, 166, "Au-dessus de", 2, DARK);
+    drawTextLimited(52, 200, iss_state.available ? iss_state.over : "Donnees ISS en attente", 3, BLACK, 432);
+    char distance_label[40] = {0};
+    if (iss_state.available && iss_state.distance_km > 0) {
+        if (iss_state.distance_km >= 1000) {
+            snprintf(distance_label, sizeof(distance_label), "Distance: %u %03u km de nous",
+                     iss_state.distance_km / 1000, iss_state.distance_km % 1000);
+        } else {
+            snprintf(distance_label, sizeof(distance_label), "Distance: %u km de nous", iss_state.distance_km);
+        }
+    } else {
+        strlcpy(distance_label, "Distance en attente", sizeof(distance_label));
+    }
+    drawText(52, 242, distance_label, 2, DARK);
+
+    constexpr int32_t map_x = 52;
+    constexpr int32_t map_y = 268;
+    constexpr int32_t map_w = 436;
+    constexpr int32_t map_h = 300;
+    drawWorldMapMini(map_x, map_y, map_w, map_h, DARK);
+    for (int8_t i = 1; i < iss_state.track_count; ++i) {
+        if (abs(iss_state.track[i].x - iss_state.track[i - 1].x) > 127) continue;
+        drawIconLine(map_x + iss_state.track[i - 1].x * map_w / 255, map_y + iss_state.track[i - 1].y * map_h / 255,
+                     map_x + iss_state.track[i].x * map_w / 255, map_y + iss_state.track[i].y * map_h / 255, WHITE, 2);
+    }
+    const int32_t home_x = map_x + 129 * map_w / 255;
+    const int32_t home_y = map_y + 58 * map_h / 255;
+    drawIconCircle(home_x, home_y, 5, WHITE, 1);
+    drawIconLine(home_x - 8, home_y, home_x + 8, home_y, WHITE, 1);
+    drawIconLine(home_x, home_y - 8, home_x, home_y + 8, WHITE, 1);
+    drawText(home_x + 10, home_y - 10, "NOUS", 1, WHITE);
+    if (iss_state.available) {
+        const int32_t iss_x = map_x + iss_state.map_x * map_w / 255;
+        const int32_t iss_y = map_y + iss_state.map_y * map_h / 255;
+        drawIconFilledCircle(iss_x, iss_y, 10, WHITE, 1);
+        drawIconFilledCircle(iss_x, iss_y, 6, BLACK, 1);
+    }
+    drawIconLine(52, 617, 82, 617, BLACK, 2);
+    drawText(94, 608, "trajectoire prevue", 3, DARK);
+    drawIconFilledCircle(66, 660, 7, BLACK, 1);
+    drawText(94, 650, "ISS maintenant", 3, BLACK);
+    drawText(52, 764, iss_state.available ? "Donnees synchronisees" : "Donnees ISS en attente", 2, DARK);
+    drawPrimaryNavBar(TAB_ISS);
+}
+
+void ListeFrigoDisplay::drawAirPage()
+{
+    drawText(52, 34, "AIR", 5, BLACK);
+    drawText(180, 46, "RADAR LOCAL", 3, DARK);
+    fillRect(32, 104, LOGICAL_WIDTH - 64, 4, BLACK);
+
+    // Keep the radar static: repeated sweep updates cause visible e-paper ghosting.
+    drawAirRadar();
+
+    if (selected_aircraft >= 0 && selected_aircraft < air_state.aircraft_count) {
+        drawAirDetails(air_state.aircraft[selected_aircraft]);
+    } else {
+        char radius_label[24] = {0};
+        snprintf(radius_label, sizeof(radius_label), "%u km", air_state.available && air_state.radius_km > 0 ? air_state.radius_km : 25);
+        drawText(52, 720, "Portee", 2, DARK);
+        drawText(152, 714, radius_label, 3, BLACK);
+        drawText(52, 764, air_state.available ? "Trafic synchronise" : "Trafic aerien en attente", 2, DARK);
+    }
+    drawPrimaryNavBar(TAB_AIR);
+}
+
+void ListeFrigoDisplay::drawAirRadar()
+{
+    fillRect(AIR_RADAR_AREA.x, AIR_RADAR_AREA.y, AIR_RADAR_AREA.width, AIR_RADAR_AREA.height, WHITE);
+
+    const int32_t radii[] = {66, 126, 186, 246};
+    for (uint8_t i = 0; i < 4; ++i) {
+        drawIconCircle(AIR_RADAR_CX, AIR_RADAR_CY, radii[i], BLACK, 1);
+    }
+    drawIconLine(AIR_RADAR_CX, AIR_RADAR_CY - 260, AIR_RADAR_CX, AIR_RADAR_CY + 260, BLACK, 1);
+    drawIconLine(AIR_RADAR_CX - 260, AIR_RADAR_CY, AIR_RADAR_CX + 260, AIR_RADAR_CY, BLACK, 1);
+    drawIconLine(AIR_RADAR_CX - 184, AIR_RADAR_CY - 184, AIR_RADAR_CX + 184, AIR_RADAR_CY + 184, DARK, 1);
+    drawIconLine(AIR_RADAR_CX - 184, AIR_RADAR_CY + 184, AIR_RADAR_CX + 184, AIR_RADAR_CY - 184, DARK, 1);
+    drawText(AIR_RADAR_CX - 8, AIR_RADAR_CY - 280, "N", 2, BLACK);
+    drawText(AIR_RADAR_CX + 262, AIR_RADAR_CY - 8, "E", 2, BLACK);
+    drawText(AIR_RADAR_CX - 8, AIR_RADAR_CY + 262, "S", 2, BLACK);
+    drawText(AIR_RADAR_CX - 280, AIR_RADAR_CY - 8, "W", 2, BLACK);
+
+    const int8_t count = air_state.available ? air_state.aircraft_count : 0;
+    for (int8_t i = 0; i < count && i < AIRCRAFT_COUNT; ++i) {
+        const Aircraft &plane = air_state.aircraft[i];
+        const int32_t x = 52 + plane.x * 436 / 255;
+        const int32_t y = 154 + plane.y * 520 / 255;
+        if (i == selected_aircraft) drawIconCircle(x, y, 18, DARK, 2);
+        drawRadarPlane(x, y, plane.heading, BLACK);
+        const int32_t label_width = min<int32_t>(100, textWidth(plane.registration, 2));
+        const int32_t label_x = x + 16 + label_width <= LOGICAL_WIDTH - 18 ? x + 16 : x - label_width - 16;
+        fillRect(label_x - 3, y - 12, label_width + 6, 20, WHITE);
+        drawTextLimited(label_x, y - 10, plane.registration, 2, BLACK, 100);
+    }
+}
+
+void ListeFrigoDisplay::drawAirDetails(const Aircraft &plane)
+{
+    constexpr int32_t panel_x = 32;
+    constexpr int32_t panel_y = 704;
+    constexpr int32_t panel_w = LOGICAL_WIDTH - 64;
+    drawRect(panel_x, panel_y, panel_w, 126, 2, BLACK);
+
+    drawText(panel_x + 12, panel_y + 10, plane.registration, 3, BLACK);
+    const int32_t tail_x = panel_x + 12 + textWidth(plane.registration, 3) + 12;
+    drawTextLimited(tail_x, panel_y + 14, plane.tail_number[0] ? plane.tail_number : "-", 2, DARK, 100);
+
+    char location[24] = {0};
+    snprintf(location, sizeof(location), "%s%s%u km", plane.bearing,
+             plane.bearing[0] ? " / " : "", plane.distance_km);
+    drawText(panel_x + panel_w - 12 - textWidth(location, 2), panel_y + 14, location, 2, BLACK);
+
+    char description[48] = {0};
+    snprintf(description, sizeof(description), "%s / %s",
+             plane.airline[0] ? plane.airline : "Compagnie inconnue",
+             plane.aircraft_type[0] ? plane.aircraft_type : "Type inconnu");
+    drawTextLimited(panel_x + 12, panel_y + 39, description, 2, DARK, panel_w - 24);
+    drawTextLimited(panel_x + 12, panel_y + 57,
+                    plane.route[0] ? plane.route : "Depart > Arrivee inconnus",
+                    2, BLACK, panel_w - 24);
+    fillRect(panel_x + 10, panel_y + 76, panel_w - 20, 2, BLACK);
+
+    char altitude[24] = {0};
+    char speed[24] = {0};
+    if (plane.altitude_m >= 1000) {
+        snprintf(altitude, sizeof(altitude), "%u %03u m", plane.altitude_m / 1000, plane.altitude_m % 1000);
+    } else {
+        snprintf(altitude, sizeof(altitude), "%u m", plane.altitude_m);
+    }
+    snprintf(speed, sizeof(speed), "%u km/h", plane.speed_kmh);
+    drawText(panel_x + 12, panel_y + 84, "ALTITUDE", 1, DARK);
+    drawText(panel_x + 12, panel_y + 102, altitude, 2, BLACK);
+    drawText(panel_x + 266, panel_y + 84, "VITESSE", 1, DARK);
+    drawText(panel_x + panel_w - 12 - textWidth(speed, 2), panel_y + 102, speed, 2, BLACK);
 }
 
 int8_t ListeFrigoDisplay::weatherTemperature(int8_t hour) const
@@ -515,23 +912,29 @@ void ListeFrigoDisplay::drawWeatherHour(int32_t x, const char *hour, const char 
 
 void ListeFrigoDisplay::drawWeatherCloud(int32_t x, int32_t y, uint8_t gray, int32_t scale)
 {
-    fillRect(x + 4 * scale, y + 14 * scale, 38 * scale, 13 * scale, gray);
-    fillRect(x + 10 * scale, y + 8 * scale, 12 * scale, 12 * scale, gray);
-    fillRect(x + 20 * scale, y + 3 * scale, 14 * scale, 18 * scale, gray);
-    fillRect(x + 32 * scale, y + 10 * scale, 10 * scale, 12 * scale, gray);
+    const int32_t p[][2] = {
+        {6, 27}, {7, 24}, {10, 21}, {14, 20}, {17, 14}, {23, 11},
+        {31, 12}, {36, 18}, {40, 18}, {45, 22}, {47, 28}, {44, 34},
+        {9, 34}, {6, 30}, {6, 27},
+    };
+    for (uint8_t i = 1; i < sizeof(p) / sizeof(p[0]); ++i) {
+        drawIconLine(x + p[i - 1][0] * scale, y + p[i - 1][1] * scale,
+                     x + p[i][0] * scale, y + p[i][1] * scale, gray, scale);
+    }
+    drawIconLine(x + 12 * scale, y + 35 * scale, x + 41 * scale, y + 35 * scale, gray, scale);
 }
 
 void ListeFrigoDisplay::drawWeatherSun(int32_t x, int32_t y, uint8_t gray, int32_t scale)
 {
-    fillRect(x + 8 * scale, y + 8 * scale, 18 * scale, 18 * scale, gray);
-    fillRect(x + 14 * scale, y, 4 * scale, 6 * scale, gray);
-    fillRect(x + 14 * scale, y + 28 * scale, 4 * scale, 6 * scale, gray);
-    fillRect(x, y + 15 * scale, 6 * scale, 4 * scale, gray);
-    fillRect(x + 28 * scale, y + 15 * scale, 6 * scale, 4 * scale, gray);
-    fillRect(x + 3 * scale, y + 3 * scale, 4 * scale, 4 * scale, gray);
-    fillRect(x + 27 * scale, y + 3 * scale, 4 * scale, 4 * scale, gray);
-    fillRect(x + 3 * scale, y + 27 * scale, 4 * scale, 4 * scale, gray);
-    fillRect(x + 27 * scale, y + 27 * scale, 4 * scale, 4 * scale, gray);
+    drawIconCircle(x + 22 * scale, y + 22 * scale, 9 * scale, gray, scale);
+    drawIconLine(x + 22 * scale, y + 2 * scale, x + 22 * scale, y + 9 * scale, gray, scale);
+    drawIconLine(x + 22 * scale, y + 35 * scale, x + 22 * scale, y + 42 * scale, gray, scale);
+    drawIconLine(x + 2 * scale, y + 22 * scale, x + 9 * scale, y + 22 * scale, gray, scale);
+    drawIconLine(x + 35 * scale, y + 22 * scale, x + 42 * scale, y + 22 * scale, gray, scale);
+    drawIconLine(x + 8 * scale, y + 8 * scale, x + 13 * scale, y + 13 * scale, gray, scale);
+    drawIconLine(x + 31 * scale, y + 31 * scale, x + 36 * scale, y + 36 * scale, gray, scale);
+    drawIconLine(x + 8 * scale, y + 36 * scale, x + 13 * scale, y + 31 * scale, gray, scale);
+    drawIconLine(x + 31 * scale, y + 13 * scale, x + 36 * scale, y + 8 * scale, gray, scale);
 }
 
 const char *ListeFrigoDisplay::weatherLabel(int16_t weather_code) const
@@ -553,27 +956,200 @@ void ListeFrigoDisplay::drawWeatherIcon(int32_t x, int32_t y, int16_t weather_co
         else drawWeatherMoon(x, y, gray, scale);
     } else if (weather_code <= 2) {
         if (is_day) drawWeatherSun(x, y, gray, scale);
-        drawWeatherCloud(x + 16 * scale, y + 16 * scale, gray, scale);
-    } else if (weather_code <= 48 || (weather_code >= 71 && weather_code <= 77)) {
+        else drawWeatherMoon(x, y, gray, scale);
+        drawWeatherCloud(x + 10 * scale, y + 8 * scale, gray, scale);
+    } else if (weather_code <= 48) {
+        drawWeatherFog(x, y, gray, scale);
+    } else if ((weather_code >= 71 && weather_code <= 77) || weather_code == 85 || weather_code == 86) {
+        drawWeatherSnow(x, y, gray, scale);
+    } else if (weather_code >= 95) {
+        drawWeatherThunder(x, y, gray, scale);
+    } else if (weather_code == 3) {
         drawWeatherCloud(x, y, gray, scale);
     } else {
         drawWeatherRain(x, y, gray, scale);
     }
 }
 
+void ListeFrigoDisplay::drawCrecheWeatherIcon(int32_t x, int32_t y, int16_t weather_code, bool is_day, uint8_t gray)
+{
+    if (weather_code == 0) {
+        if (is_day) {
+            drawIconCircle(x + 18, y + 16, 7, gray, 1);
+            drawIconLine(x + 18, y + 2, x + 18, y + 7, gray, 1);
+            drawIconLine(x + 18, y + 25, x + 18, y + 30, gray, 1);
+            drawIconLine(x + 4, y + 16, x + 9, y + 16, gray, 1);
+            drawIconLine(x + 27, y + 16, x + 32, y + 16, gray, 1);
+            drawIconLine(x + 8, y + 6, x + 12, y + 10, gray, 1);
+            drawIconLine(x + 24, y + 22, x + 28, y + 26, gray, 1);
+            drawIconLine(x + 8, y + 26, x + 12, y + 22, gray, 1);
+            drawIconLine(x + 24, y + 10, x + 28, y + 6, gray, 1);
+        } else {
+            drawIconFilledCircle(x + 18, y + 16, 11, gray, 1);
+            drawIconFilledCircle(x + 23, y + 12, 11, WHITE, 1);
+            drawIconCircle(x + 18, y + 16, 11, gray, 1);
+        }
+        return;
+    }
+
+    if (weather_code <= 2) {
+        if (is_day) {
+            drawIconCircle(x + 13, y + 12, 5, gray, 1);
+            drawIconLine(x + 13, y + 2, x + 13, y + 6, gray, 1);
+            drawIconLine(x + 4, y + 12, x + 8, y + 12, gray, 1);
+            drawIconLine(x + 18, y + 7, x + 21, y + 4, gray, 1);
+        }
+        drawIconLine(x + 9, y + 26, x + 12, y + 21, gray, 1);
+        drawIconLine(x + 12, y + 21, x + 17, y + 20, gray, 1);
+        drawIconLine(x + 17, y + 20, x + 20, y + 14, gray, 1);
+        drawIconLine(x + 20, y + 14, x + 28, y + 15, gray, 1);
+        drawIconLine(x + 28, y + 15, x + 32, y + 20, gray, 1);
+        drawIconLine(x + 32, y + 20, x + 36, y + 20, gray, 1);
+        drawIconLine(x + 36, y + 20, x + 40, y + 25, gray, 1);
+        drawIconLine(x + 40, y + 25, x + 37, y + 30, gray, 1);
+        drawIconLine(x + 12, y + 30, x + 35, y + 30, gray, 1);
+        return;
+    }
+
+    const int32_t cloud[][2] = {
+        {5, 22}, {7, 18}, {12, 17}, {16, 11}, {24, 11},
+        {29, 16}, {33, 16}, {38, 20}, {39, 25}, {36, 29},
+        {9, 29}, {5, 25}, {5, 22},
+    };
+    for (uint8_t i = 1; i < sizeof(cloud) / sizeof(cloud[0]); ++i) {
+        drawIconLine(x + cloud[i - 1][0], y + cloud[i - 1][1],
+                     x + cloud[i][0], y + cloud[i][1], gray, 1);
+    }
+    drawIconLine(x + 11, y + 30, x + 34, y + 30, gray, 1);
+
+    if (weather_code <= 48) {
+        drawIconLine(x + 7, y + 35, x + 38, y + 35, gray, 1);
+        drawIconLine(x + 12, y + 40, x + 33, y + 40, gray, 1);
+    } else if ((weather_code >= 71 && weather_code <= 77) || weather_code == 85 || weather_code == 86) {
+        drawIconLine(x + 12, y + 37, x + 18, y + 37, gray, 1);
+        drawIconLine(x + 15, y + 34, x + 15, y + 40, gray, 1);
+        drawIconLine(x + 28, y + 39, x + 34, y + 39, gray, 1);
+        drawIconLine(x + 31, y + 36, x + 31, y + 42, gray, 1);
+    } else {
+        drawIconLine(x + 12, y + 35, x + 9, y + 42, gray, 1);
+        drawIconLine(x + 24, y + 36, x + 21, y + 43, gray, 1);
+        drawIconLine(x + 36, y + 35, x + 33, y + 42, gray, 1);
+        if (weather_code >= 95) {
+            drawIconLine(x + 26, y + 32, x + 21, y + 42, gray, 1);
+            drawIconLine(x + 21, y + 42, x + 28, y + 42, gray, 1);
+            drawIconLine(x + 28, y + 42, x + 23, y + 49, gray, 1);
+            drawIconLine(x + 23, y + 49, x + 36, y + 38, gray, 1);
+        }
+    }
+}
+
 void ListeFrigoDisplay::drawWeatherRain(int32_t x, int32_t y, uint8_t gray, int32_t scale)
 {
     drawWeatherCloud(x, y, gray, scale);
-    fillRect(x + 9 * scale, y + 31 * scale, 4 * scale, 9 * scale, gray);
-    fillRect(x + 23 * scale, y + 35 * scale, 4 * scale, 9 * scale, gray);
-    fillRect(x + 37 * scale, y + 31 * scale, 4 * scale, 9 * scale, gray);
+    drawIconLine(x + 14 * scale, y + 38 * scale, x + 10 * scale, y + 46 * scale, gray, scale);
+    drawIconLine(x + 26 * scale, y + 40 * scale, x + 22 * scale, y + 48 * scale, gray, scale);
+    drawIconLine(x + 38 * scale, y + 38 * scale, x + 34 * scale, y + 46 * scale, gray, scale);
 }
 
 void ListeFrigoDisplay::drawWeatherMoon(int32_t x, int32_t y, uint8_t gray, int32_t scale)
 {
-    fillRect(x + 10 * scale, y + 2 * scale, 17 * scale, 32 * scale, gray);
-    fillRect(x + 4 * scale, y + 8 * scale, 29 * scale, 20 * scale, gray);
-    fillRect(x + 18 * scale, y + 3 * scale, 16 * scale, 28 * scale, WHITE);
+    drawIconFilledCircle(x + 23 * scale, y + 22 * scale, 17 * scale, gray, scale);
+    drawIconFilledCircle(x + 31 * scale, y + 17 * scale, 17 * scale, WHITE, scale);
+    drawIconCircle(x + 23 * scale, y + 22 * scale, 17 * scale, gray, scale);
+}
+
+void ListeFrigoDisplay::drawWeatherFog(int32_t x, int32_t y, uint8_t gray, int32_t scale)
+{
+    drawWeatherCloud(x, y, gray, scale);
+    drawIconLine(x + 7 * scale, y + 40 * scale, x + 45 * scale, y + 40 * scale, gray, scale);
+    drawIconLine(x + 12 * scale, y + 46 * scale, x + 40 * scale, y + 46 * scale, gray, scale);
+}
+
+void ListeFrigoDisplay::drawWeatherSnow(int32_t x, int32_t y, uint8_t gray, int32_t scale)
+{
+    drawWeatherCloud(x, y, gray, scale);
+    const int32_t flakes[][2] = {{14, 42}, {27, 47}, {40, 42}};
+    for (uint8_t i = 0; i < sizeof(flakes) / sizeof(flakes[0]); ++i) {
+        const int32_t fx = x + flakes[i][0] * scale;
+        const int32_t fy = y + flakes[i][1] * scale;
+        drawIconLine(fx - 3 * scale, fy, fx + 3 * scale, fy, gray, scale);
+        drawIconLine(fx, fy - 3 * scale, fx, fy + 3 * scale, gray, scale);
+        drawIconLine(fx - 2 * scale, fy - 2 * scale, fx + 2 * scale, fy + 2 * scale, gray, scale);
+        drawIconLine(fx - 2 * scale, fy + 2 * scale, fx + 2 * scale, fy - 2 * scale, gray, scale);
+    }
+}
+
+void ListeFrigoDisplay::drawWeatherThunder(int32_t x, int32_t y, uint8_t gray, int32_t scale)
+{
+    drawWeatherRain(x, y, gray, scale);
+    drawIconLine(x + 28 * scale, y + 36 * scale, x + 22 * scale, y + 46 * scale, gray, scale);
+    drawIconLine(x + 22 * scale, y + 46 * scale, x + 30 * scale, y + 46 * scale, gray, scale);
+    drawIconLine(x + 30 * scale, y + 46 * scale, x + 25 * scale, y + 52 * scale, gray, scale);
+    drawIconLine(x + 25 * scale, y + 52 * scale, x + 38 * scale, y + 42 * scale, gray, scale);
+}
+
+void ListeFrigoDisplay::drawIconPoint(int32_t x, int32_t y, uint8_t gray, int32_t scale)
+{
+    const int32_t size = max<int32_t>(1, scale);
+    fillRect(x - size / 2, y - size / 2, size, size, gray);
+}
+
+void ListeFrigoDisplay::drawIconLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint8_t gray, int32_t scale)
+{
+    const int32_t dx = abs(x1 - x0);
+    const int32_t sx = x0 < x1 ? 1 : -1;
+    const int32_t dy = -abs(y1 - y0);
+    const int32_t sy = y0 < y1 ? 1 : -1;
+    int32_t err = dx + dy;
+    while (true) {
+        drawIconPoint(x0, y0, gray, scale);
+        if (x0 == x1 && y0 == y1) break;
+        const int32_t e2 = 2 * err;
+        if (e2 >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+void ListeFrigoDisplay::drawIconCircle(int32_t cx, int32_t cy, int32_t radius, uint8_t gray, int32_t scale)
+{
+    int32_t x = radius;
+    int32_t y = 0;
+    int32_t err = 0;
+    while (x >= y) {
+        drawIconPoint(cx + x, cy + y, gray, scale);
+        drawIconPoint(cx + y, cy + x, gray, scale);
+        drawIconPoint(cx - y, cy + x, gray, scale);
+        drawIconPoint(cx - x, cy + y, gray, scale);
+        drawIconPoint(cx - x, cy - y, gray, scale);
+        drawIconPoint(cx - y, cy - x, gray, scale);
+        drawIconPoint(cx + y, cy - x, gray, scale);
+        drawIconPoint(cx + x, cy - y, gray, scale);
+        ++y;
+        if (err <= 0) {
+            err += 2 * y + 1;
+        }
+        if (err > 0) {
+            --x;
+            err -= 2 * x + 1;
+        }
+    }
+}
+
+void ListeFrigoDisplay::drawIconFilledCircle(int32_t cx, int32_t cy, int32_t radius, uint8_t gray, int32_t scale)
+{
+    for (int32_t row = -radius; row <= radius; ++row) {
+        for (int32_t col = -radius; col <= radius; ++col) {
+            if (col * col + row * row <= radius * radius) {
+                drawIconPoint(cx + col, cy + row, gray, scale);
+            }
+        }
+    }
 }
 
 void ListeFrigoDisplay::drawBabyAvatar(int32_t x, int32_t y)
@@ -583,11 +1159,37 @@ void ListeFrigoDisplay::drawBabyAvatar(int32_t x, int32_t y)
 
 void ListeFrigoDisplay::drawBabyNavIcon(int32_t x, int32_t y, uint8_t gray)
 {
-    drawRect(x + 5, y + 2, 24, 24, 3, gray);
-    fillRect(x + 11, y + 9, 3, 3, gray);
-    fillRect(x + 20, y + 9, 3, 3, gray);
-    fillRect(x + 11, y + 19, 12, 3, gray);
-    fillRect(x + 2, y + 29, 30, 14, gray);
+    drawIconCircle(x + 15, y + 11, 10, gray, 1);
+    fillRect(x + 10, y + 8, 3, 3, gray);
+    fillRect(x + 18, y + 8, 3, 3, gray);
+    drawIconLine(x + 10, y + 16, x + 15, y + 19, gray, 1);
+    drawIconLine(x + 15, y + 19, x + 20, y + 16, gray, 1);
+    drawRect(x + 5, y + 24, 20, 5, 2, gray);
+}
+
+void ListeFrigoDisplay::drawListNavIcon(int32_t x, int32_t y, uint8_t gray)
+{
+    drawRect(x + 2, y + 3, 28, 22, 3, gray);
+    fillRect(x + 8, y + 9, 16, 2, gray);
+    fillRect(x + 8, y + 15, 16, 2, gray);
+    fillRect(x + 8, y + 21, 11, 2, gray);
+}
+
+void ListeFrigoDisplay::drawMealNavIcon(int32_t x, int32_t y, uint8_t gray)
+{
+    drawIconLine(x + 2, y + 25, x + 28, y + 25, gray, 1);
+    drawIconLine(x + 5, y + 22, x + 8, y + 14, gray, 1);
+    drawIconLine(x + 8, y + 14, x + 15, y + 10, gray, 1);
+    drawIconLine(x + 15, y + 10, x + 22, y + 14, gray, 1);
+    drawIconLine(x + 22, y + 14, x + 25, y + 22, gray, 1);
+    drawIconLine(x + 5, y + 22, x + 25, y + 22, gray, 1);
+    fillRect(x + 13, y + 6, 4, 3, gray);
+}
+
+void ListeFrigoDisplay::drawMetroNavIcon(int32_t x, int32_t y, uint8_t gray)
+{
+    drawRect(x + 2, y + 2, 28, 28, 3, gray);
+    drawText(x + 9, y + 8, "M", 2, gray);
 }
 
 void ListeFrigoDisplay::drawMonochromeBitmap(int32_t x, int32_t y, int32_t width, int32_t height, const uint8_t *bits, uint8_t gray)
@@ -698,36 +1300,45 @@ void ListeFrigoDisplay::drawNavBar(NavTabId selected_tab)
 
 void ListeFrigoDisplay::drawPrimaryNavBar(NavTabId selected_tab)
 {
-    constexpr int32_t nav_top = 850;
-    constexpr int32_t item_width = (LOGICAL_WIDTH - 64) / 3;
-    fillRect(32, nav_top - 4, LOGICAL_WIDTH - 64, 4, BLACK);
-    fillRect(32, nav_top, LOGICAL_WIDTH - 64, 78, WHITE);
+    const int8_t tab_count = epaper_settings.visible_tab_count > 0 ? min<int8_t>(epaper_settings.visible_tab_count, NAV_VISIBLE_TAB_MAX) : NAV_VISIBLE_TAB_MAX;
+    const int32_t available_width = NAV_WIDTH - (tab_count - 1) * NAV_GAP;
+    const int32_t item_width = available_width / tab_count;
+    const int32_t remainder = available_width % tab_count;
+    constexpr int32_t icon_top = NAV_TOP + 8;
+    constexpr int32_t label_top = NAV_TOP + 54;
 
-    const bool listes_selected = selected_tab == TAB_LISTES;
-    const bool creche_selected = selected_tab == TAB_CRECHE;
-    const bool meteo_selected = selected_tab == TAB_METEO;
-    if (listes_selected) {
-        fillRect(35, nav_top + 6, item_width - 6, 60, BLACK);
+    const NavTabId *tabs = epaper_settings.visible_tab_count > 0 ? epaper_settings.visible_tabs : DEFAULT_VISIBLE_TABS;
+    int32_t x = NAV_LEFT;
+    for (int8_t index = 0; index < tab_count; ++index) {
+        const int32_t width = item_width + (index < remainder ? 1 : 0);
+        const bool selected = tabs[index] == selected_tab;
+        const uint8_t ink = selected ? WHITE : BLACK;
+        if (selected) {
+            fillRect(x, NAV_TOP, width, NAV_HEIGHT, BLACK);
+        } else {
+            drawRect(x, NAV_TOP, width, NAV_HEIGHT, 2, BLACK);
+        }
+        const int32_t center = x + width / 2;
+        if (tabs[index] == TAB_LISTES) {
+            drawListNavIcon(center - 16, icon_top, ink);
+        } else if (tabs[index] == TAB_CRECHE) {
+            drawBabyNavIcon(center - 15, icon_top, ink);
+        } else if (tabs[index] == TAB_METEO) {
+            drawWeatherCloud(center - 24, NAV_TOP + 1, ink);
+        } else if (tabs[index] == TAB_REPAS) {
+            drawMealNavIcon(center - 15, icon_top, ink);
+        } else if (tabs[index] == TAB_METRO) {
+            drawMetroNavIcon(center - 16, icon_top, ink);
+        } else if (tabs[index] == TAB_REGLAGES) {
+            drawSettingsNavIcon(center - 15, icon_top, ink);
+        } else if (tabs[index] == TAB_ISS) {
+            drawIssNavIcon(center - 15, icon_top, ink);
+        } else {
+            drawAirNavIcon(center - 15, icon_top, ink);
+        }
+        drawText(x + (width - textWidth(navAsciiName(tabs[index]), 1)) / 2, label_top, navAsciiName(tabs[index]), 1, ink);
+        x += width + NAV_GAP;
     }
-    if (creche_selected) {
-        fillRect(32 + item_width + 3, nav_top + 6, item_width - 6, 60, BLACK);
-    }
-    if (meteo_selected) {
-        fillRect(32 + item_width * 2 + 3, nav_top + 6, item_width - 6, 60, BLACK);
-    }
-
-    const uint8_t listes_ink = listes_selected ? WHITE : BLACK;
-    const uint8_t creche_ink = creche_selected ? WHITE : BLACK;
-    const uint8_t meteo_ink = meteo_selected ? WHITE : BLACK;
-    drawRect(64, nav_top + 16, 28, 22, 3, listes_ink);
-    fillRect(70, nav_top + 23, 16, 3, listes_ink);
-    fillRect(70, nav_top + 31, 16, 3, listes_ink);
-    drawText(100, nav_top + 22, "Listes", 2, listes_ink);
-    drawBabyNavIcon(202, nav_top + 12, creche_ink);
-    drawText(240, nav_top + 22, "Creche", 2, creche_ink);
-    drawWeatherCloud(368, nav_top + 17, meteo_ink);
-    drawText(412, nav_top + 22, "Meteo", 2, meteo_ink);
-    fillRect(32, nav_top + 74, LOGICAL_WIDTH - 64, 4, BLACK);
 }
 
 void ListeFrigoDisplay::drawNavItem(NavTabId tab, bool selected)
@@ -749,11 +1360,11 @@ void ListeFrigoDisplay::drawNavItem(NavTabId tab, bool selected)
     } else if (tab == TAB_METEO) {
         drawRect(center_x - 19, nav_top + 28, 38, 20, 4, ink);
         fillRect(center_x - 12, nav_top + 18, 24, 14, ink);
-    } else if (tab == TAB_TENUES) {
+    } else if (tab == TAB_CRECHE) {
         drawRect(center_x - 16, nav_top + 18, 32, 34, 4, ink);
         fillRect(center_x - 26, nav_top + 22, 10, 13, ink);
         fillRect(center_x + 16, nav_top + 22, 10, 13, ink);
-    } else if (tab == TAB_VELIB) {
+    } else if (tab == TAB_REPAS) {
         drawRect(center_x - 25, nav_top + 34, 50, 16, 4, ink);
         drawRect(center_x - 22, nav_top + 18, 16, 16, 3, ink);
         drawRect(center_x + 6, nav_top + 18, 16, 16, 3, ink);
@@ -763,6 +1374,51 @@ void ListeFrigoDisplay::drawNavItem(NavTabId tab, bool selected)
     }
 
     drawText(x + (item_w - textWidth(navAsciiName(tab), 2)) / 2, nav_top + 50, navAsciiName(tab), 2, ink);
+}
+
+void ListeFrigoDisplay::drawSettingsNavIcon(int32_t x, int32_t y, uint8_t gray)
+{
+    drawIconCircle(x + 15, y + 15, 12, gray, 1);
+    fillRect(x + 13, y + 1, 4, 8, gray);
+    fillRect(x + 13, y + 21, 4, 8, gray);
+    fillRect(x + 1, y + 13, 8, 4, gray);
+    fillRect(x + 21, y + 13, 8, 4, gray);
+    drawIconFilledCircle(x + 15, y + 15, 4, gray, 1);
+}
+
+void ListeFrigoDisplay::drawIssNavIcon(int32_t x, int32_t y, uint8_t gray)
+{
+    drawIconCircle(x + 15, y + 15, 12, gray, 1);
+    drawIconLine(x + 4, y + 18, x + 26, y + 12, gray, 1);
+    fillRect(x + 13, y + 13, 5, 5, gray);
+    drawIconLine(x + 15, y + 4, x + 15, y + 26, gray, 1);
+    drawIconLine(x + 5, y + 15, x + 25, y + 15, gray, 1);
+}
+
+void ListeFrigoDisplay::drawAirNavIcon(int32_t x, int32_t y, uint8_t gray)
+{
+    drawIconCircle(x + 15, y + 15, 13, gray, 1);
+    drawIconCircle(x + 15, y + 15, 7, gray, 1);
+    drawRadarPlane(x + 15, y + 15, 45, gray);
+}
+
+void ListeFrigoDisplay::drawRadarPlane(int32_t x, int32_t y, int16_t heading, uint8_t gray)
+{
+    int8_t dx = 0;
+    int8_t dy = -9;
+    if (heading >= 45 && heading < 135) {
+        dx = 9;
+        dy = 0;
+    } else if (heading >= 135 && heading < 225) {
+        dx = 0;
+        dy = 9;
+    } else if (heading >= 225 && heading < 315) {
+        dx = -9;
+        dy = 0;
+    }
+    drawIconLine(x, y, x + dx, y + dy, gray, 2);
+    drawIconLine(x - 7, y, x + 7, y, gray, 1);
+    drawIconLine(x - 4, y + 5, x + 4, y + 5, gray, 1);
 }
 
 void ListeFrigoDisplay::rotateLogicalToPhysical()
@@ -999,7 +1655,7 @@ void ListeFrigoDisplay::drawText(int32_t x, int32_t y, const char *text, int32_t
 
 void ListeFrigoDisplay::drawTextLimited(int32_t x, int32_t y, const char *text, int32_t scale, uint8_t gray, int32_t max_width)
 {
-    char clipped[16] = {0};
+    char clipped[MEAL_LABEL_MAX] = {0};
     int32_t used = 0;
     size_t out = 0;
     while (*text && out < sizeof(clipped) - 1) {

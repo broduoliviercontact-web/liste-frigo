@@ -4,6 +4,7 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include "secrets.h"
+#include "ListeFrigoTls.h"
 
 namespace {
 
@@ -12,14 +13,14 @@ constexpr const char *LISTS_API_URL = "https://liste-frigo.pliskain.chatgpt.site
 constexpr uint32_t FIRST_FETCH_DELAY_MS = 3000;
 constexpr uint32_t SUCCESS_FETCH_INTERVAL_MS = 15000;
 constexpr uint32_t MAX_RETRY_DELAY_MS = 120000;
-constexpr uint32_t HTTP_TIMEOUT_MS = 7000;
+constexpr uint32_t HTTP_TIMEOUT_MS = 60000;
 constexpr uint32_t WRITE_GAP_MS = 250;
 constexpr uint32_t TOGGLE_RETRY_DELAYS_MS[] = {1000, 2000, 5000, 10000, 30000};
 
-#if defined(EPAPER_BYPASS_TOKEN)
-constexpr bool HAS_EPAPER_TOKEN = true;
+#if defined(SUPERVIE_ACCESS_CODE)
+constexpr bool HAS_SUPERVIE_ACCESS_CODE = true;
 #else
-constexpr bool HAS_EPAPER_TOKEN = false;
+constexpr bool HAS_SUPERVIE_ACCESS_CODE = false;
 #endif
 
 void copyMessage(char *target, size_t target_size, const char *message)
@@ -108,6 +109,73 @@ int8_t hourFromIso(const char *timestamp)
     return hour >= 0 && hour < 24 ? hour : -1;
 }
 
+int16_t mapXFromLongitude(float longitude)
+{
+    const int value = static_cast<int>(((longitude + 180.0f) / 360.0f) * 255.0f + 0.5f);
+    return constrain(value, 0, 255);
+}
+
+int16_t mapYFromLatitude(float latitude)
+{
+    const int value = static_cast<int>(((90.0f - latitude) / 180.0f) * 255.0f + 0.5f);
+    return constrain(value, 0, 255);
+}
+
+uint16_t distanceFromPantinKm(float latitude, float longitude)
+{
+    constexpr float PANTIN_LATITUDE = 48.8966f;
+    constexpr float PANTIN_LONGITUDE = 2.4017f;
+    constexpr float EARTH_RADIUS_KM = 6371.0f;
+    constexpr float DEG_TO_RAD_F = 0.01745329252f;
+    const float latitude_delta = (latitude - PANTIN_LATITUDE) * DEG_TO_RAD_F;
+    const float longitude_delta = (longitude - PANTIN_LONGITUDE) * DEG_TO_RAD_F;
+    const float latitude_a = PANTIN_LATITUDE * DEG_TO_RAD_F;
+    const float latitude_b = latitude * DEG_TO_RAD_F;
+    const float sin_latitude = sinf(latitude_delta * 0.5f);
+    const float sin_longitude = sinf(longitude_delta * 0.5f);
+    const float haversine = sin_latitude * sin_latitude +
+                            cosf(latitude_a) * cosf(latitude_b) * sin_longitude * sin_longitude;
+    const float central_angle = 2.0f * atan2f(sqrtf(haversine), sqrtf(max(0.0f, 1.0f - haversine)));
+    return static_cast<uint16_t>(roundf(EARTH_RADIUS_KM * central_angle));
+}
+
+struct AircraftMetadata {
+    const char *callsign;
+    const char *tail_number;
+    const char *airline;
+    const char *aircraft_type;
+    const char *route;
+    const char *bearing;
+    uint16_t distance_km;
+};
+
+const AircraftMetadata AIRCRAFT_METADATA[] = {
+    {"AFR76P", "F-GZNP", "Air France", "Boeing 777", "CDG > Montreal", "NE", 31},
+    {"RYR32HA", "EI-EKD", "Ryanair", "Boeing 737", "Beauvais > Porto", "E", 8},
+    {"EJU49KT", "OE-IJZ", "easyJet", "Airbus A320", "CDG > Toulouse", "SW", 27},
+    {"TVF1QD", "F-HTVC", "Transavia", "Boeing 737", "Orly > Lisbonne", "NW", 24},
+    {"BAW8SG", "G-EUUT", "British Airways", "Airbus A320", "Londres > Geneve", "SE", 34},
+    {"DAH108S", "7T-VKE", "Air Algerie", "Boeing 737", "CDG > Alger", "N", 4},
+    {"DLH7MC", "D-AIWI", "Lufthansa", "Airbus A320", "Francfort > Paris", "E", 38},
+    {"VLG42Z", "EC-MHA", "Vueling", "Airbus A321", "Paris > Barcelone", "S", 48},
+    {"TRA9KL", "PH-HXN", "Transavia", "Boeing 737", "Rotterdam > Orly", "W", 33},
+    {"KLM88R", "PH-BXN", "KLM", "Boeing 737", "Paris > Amsterdam", "N", 41},
+};
+
+void applyAircraftMetadata(Aircraft &target)
+{
+    for (const AircraftMetadata &metadata : AIRCRAFT_METADATA) {
+        if (strcmp(target.registration, metadata.callsign) != 0) continue;
+        if (!target.tail_number[0]) copyEpaperText(target.tail_number, sizeof(target.tail_number), metadata.tail_number, "-");
+        if (!target.airline[0]) copyEpaperText(target.airline, sizeof(target.airline), metadata.airline, "-");
+        if (!target.aircraft_type[0]) copyEpaperText(target.aircraft_type, sizeof(target.aircraft_type), metadata.aircraft_type, "-");
+        if (!target.route[0]) copyEpaperText(target.route, sizeof(target.route), metadata.route, "-");
+        if (!target.bearing[0]) strlcpy(target.bearing, metadata.bearing, sizeof(target.bearing));
+        if (target.distance_km == 0) target.distance_km = metadata.distance_km;
+        return;
+    }
+}
+
 void fetchTask(void *param)
 {
     auto *client = static_cast<ListeFrigoApi *>(param);
@@ -127,7 +195,7 @@ void fetchTask(void *param)
         WiFiClientSecure secure_client;
         HTTPClient http;
 
-        secure_client.setInsecure();
+        secure_client.setCACert(SUPERVIE_TLS_CA);
         http.setTimeout(HTTP_TIMEOUT_MS);
         http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
@@ -144,6 +212,16 @@ void fetchTask(void *param)
         bool has_list_state = false;
         WeatherState fetched_weather = {};
         bool has_weather_state = false;
+        MealWeekState fetched_meal_week = {};
+        bool has_meal_week_state = false;
+        MetroState fetched_metro = {};
+        bool has_metro_state = false;
+        EpaperSettings fetched_settings = {};
+        bool has_settings = false;
+        IssState fetched_iss = {};
+        bool has_iss_state = false;
+        AirState fetched_air = {};
+        bool has_air_state = false;
         const bool is_write_request = kind == ListeFrigoApi::REQUEST_TOGGLE_ITEM ||
                                       kind == ListeFrigoApi::REQUEST_SELECT_LIST ||
                                       kind == ListeFrigoApi::REQUEST_ADD_ITEM;
@@ -156,8 +234,8 @@ void fetchTask(void *param)
 
         if (http.begin(secure_client, url)) {
             http.addHeader("Accept", "application/json");
-#if defined(EPAPER_BYPASS_TOKEN)
-            http.addHeader("OAI-Sites-Authorization", String("Bearer ") + EPAPER_BYPASS_TOKEN);
+#if defined(SUPERVIE_ACCESS_CODE)
+            http.addHeader("X-SUPERVIE-ACCESS-CODE", SUPERVIE_ACCESS_CODE);
 #endif
             if (is_write_request) {
                 http.addHeader("Content-Type", "application/json");
@@ -303,6 +381,142 @@ void fetchTask(void *param)
                         has_weather_state = fetched_weather.hourly_count > 0;
                     }
 
+                    JsonObject meals = doc["pages"]["repas"].as<JsonObject>();
+                    if (strcmp(meals["status"] | "", "ready") == 0) {
+                        fetched_meal_week.available = true;
+                        for (JsonObject meal : meals["meals"].as<JsonArray>()) {
+                            if (fetched_meal_week.meal_count >= WEEK_MEAL_COUNT) break;
+                            const int day_index = meal["dayIndex"] | -1;
+                            const char *moment = meal["moment"] | "";
+                            if (day_index < 0 || day_index > 6 || (strcmp(moment, "midi") != 0 && strcmp(moment, "soir") != 0)) continue;
+                            WeekMeal &target = fetched_meal_week.meals[fetched_meal_week.meal_count++];
+                            target.day_index = static_cast<uint8_t>(day_index);
+                            target.lunch = strcmp(moment, "midi") == 0;
+                            copyEpaperText(target.label, sizeof(target.label), meal["label"] | "", "-");
+                        }
+                        has_meal_week_state = true;
+                    }
+
+                    JsonObject metro = doc["pages"]["metro"].as<JsonObject>();
+                    if (strcmp(metro["status"] | "", "ready") == 0) {
+                        fetched_metro.available = true;
+                        strlcpy(fetched_metro.updated_at, metro["updatedAt"] | "", sizeof(fetched_metro.updated_at));
+                        for (JsonObject line : metro["lines"].as<JsonArray>()) {
+                            if (fetched_metro.line_count >= METRO_LINE_COUNT) break;
+                            MetroLine &target = fetched_metro.lines[fetched_metro.line_count++];
+                            copyEpaperText(target.label, sizeof(target.label), line["label"] | "-", "-");
+                            copyEpaperText(target.stop, sizeof(target.stop), line["stop"] | "", "-");
+                            target.metro = strcmp(line["mode"] | "", "metro") == 0;
+                            target.available = line["available"] | false;
+                            for (JsonObject direction : line["directions"].as<JsonArray>()) {
+                                if (target.direction_count >= METRO_DIRECTION_COUNT) break;
+                                MetroDirection &target_direction = target.directions[target.direction_count];
+                                copyEpaperText(target_direction.destination, sizeof(target_direction.destination), direction["destination"] | "", "-");
+                                for (JsonVariant minute : direction["minutes"].as<JsonArray>()) {
+                                    if (target_direction.passage_count >= METRO_PASSAGE_COUNT) break;
+                                    if (minute.isNull()) continue;
+                                    const int value = minute.as<int>();
+                                    if (value < 0 || value > 180) continue;
+                                    target_direction.minutes[target_direction.passage_count++] = static_cast<uint8_t>(value);
+                                }
+                                if (target_direction.passage_count > 0) ++target.direction_count;
+                            }
+                            target.available = target.available && target.direction_count > 0;
+                        }
+                        has_metro_state = fetched_metro.line_count > 0;
+                    }
+
+                    JsonObject settings = doc["epaperSettings"].as<JsonObject>();
+                    if (settings.isNull()) {
+                        settings = doc["pages"]["reglages"].as<JsonObject>();
+                    }
+                    if (!settings.isNull()) {
+                        const char *preferred_tab = settings["preferredTab"] | "";
+                        if (!preferred_tab || !*preferred_tab) preferred_tab = settings["activeTab"] | "";
+                        fetched_settings.preferred_tab = navTabFromApiKey(preferred_tab);
+                        JsonArray visible_tabs = settings["visibleTabs"].as<JsonArray>();
+                        for (JsonVariant value : visible_tabs) {
+                            if (fetched_settings.visible_tab_count >= NAV_VISIBLE_TAB_MAX) break;
+                            const NavTabId tab = navTabFromApiKey(value.as<const char *>());
+                            if (tab == TAB_NONE) continue;
+                            bool duplicate = false;
+                            for (int8_t i = 0; i < fetched_settings.visible_tab_count; ++i) {
+                                if (fetched_settings.visible_tabs[i] == tab) {
+                                    duplicate = true;
+                                    break;
+                                }
+                            }
+                            if (!duplicate) fetched_settings.visible_tabs[fetched_settings.visible_tab_count++] = tab;
+                        }
+                        fetched_settings.carousel_enabled = settings["carousel"]["enabled"] | false;
+                        fetched_settings.carousel_interval_seconds = settings["carousel"]["intervalSeconds"] | 120;
+                        if (fetched_settings.carousel_interval_seconds < 30) fetched_settings.carousel_interval_seconds = 30;
+                        has_settings = true;
+                    }
+
+                    JsonObject iss = doc["pages"]["iss"].as<JsonObject>();
+                    if (strcmp(iss["status"] | "", "ready") == 0) {
+                        fetched_iss.available = true;
+                        copyEpaperText(fetched_iss.over, sizeof(fetched_iss.over), iss["over"] | "North Pacific Ocean", "Earth orbit");
+                        fetched_iss.speed_kmh = iss["speedKmh"] | 27598;
+                        const bool has_coordinates = !iss["longitude"].isNull() && !iss["latitude"].isNull();
+                        const float longitude = iss["longitude"] | 0.0f;
+                        const float latitude = iss["latitude"] | 0.0f;
+                        if (has_coordinates) fetched_iss.distance_km = distanceFromPantinKm(latitude, longitude);
+                        JsonObject position = iss["position"].as<JsonObject>();
+                        if (!position.isNull() && !position["x"].isNull() && !position["y"].isNull()) {
+                            fetched_iss.map_x = constrain(position["x"].as<int>(), 0, 255);
+                            fetched_iss.map_y = constrain(position["y"].as<int>(), 0, 255);
+                        } else {
+                            fetched_iss.map_x = mapXFromLongitude(longitude);
+                            fetched_iss.map_y = mapYFromLatitude(latitude);
+                        }
+                        for (JsonObject point : iss["track"].as<JsonArray>()) {
+                            if (fetched_iss.track_count >= ISS_TRACK_POINT_COUNT) break;
+                            IssTrackPoint &target = fetched_iss.track[fetched_iss.track_count];
+                            if (!point["x"].isNull() && !point["y"].isNull()) {
+                                target.x = constrain(point["x"].as<int>(), 0, 255);
+                                target.y = constrain(point["y"].as<int>(), 0, 255);
+                            } else if (!point["longitude"].isNull() && !point["latitude"].isNull()) {
+                                target.x = mapXFromLongitude(point["longitude"].as<float>());
+                                target.y = mapYFromLatitude(point["latitude"].as<float>());
+                            } else {
+                                continue;
+                            }
+                            ++fetched_iss.track_count;
+                        }
+                        has_iss_state = true;
+                    }
+
+                    JsonObject air = doc["pages"]["air"].as<JsonObject>();
+                    if (strcmp(air["status"] | "", "ready") == 0) {
+                        fetched_air.available = true;
+                        fetched_air.radius_km = air["radiusKm"] | 25;
+                        for (JsonObject aircraft : air["aircraft"].as<JsonArray>()) {
+                            if (fetched_air.aircraft_count >= AIRCRAFT_COUNT) break;
+                            Aircraft &target = fetched_air.aircraft[fetched_air.aircraft_count++];
+                            const char *callsign = aircraft["callsign"] | "";
+                            if (!callsign || !*callsign) callsign = aircraft["id"] | "";
+                            if (!callsign || !*callsign) callsign = aircraft["registration"] | "PLANE";
+                            copyEpaperText(target.registration, sizeof(target.registration), callsign, "PLANE");
+                            copyEpaperText(target.tail_number, sizeof(target.tail_number), aircraft["tailNumber"] | "", "");
+                            copyEpaperText(target.airline, sizeof(target.airline), aircraft["airline"] | "", "");
+                            const char *aircraft_type = aircraft["aircraftType"] | "";
+                            if (!aircraft_type || !*aircraft_type) aircraft_type = aircraft["aircraft"] | "";
+                            copyEpaperText(target.aircraft_type, sizeof(target.aircraft_type), aircraft_type, "");
+                            copyEpaperText(target.route, sizeof(target.route), aircraft["route"] | "", "");
+                            copyEpaperText(target.bearing, sizeof(target.bearing), aircraft["bearing"] | "", "");
+                            target.x = constrain(aircraft["x"] | 128, 0, 255);
+                            target.y = constrain(aircraft["y"] | 128, 0, 255);
+                            target.heading = constrain(aircraft["heading"] | 0, 0, 359);
+                            target.altitude_m = constrain(aircraft["altitudeM"] | 0, 0, 65535);
+                            target.speed_kmh = constrain(aircraft["speedKmh"] | 0, 0, 65535);
+                            target.distance_km = constrain(aircraft["distanceKm"] | 0, 0, 65535);
+                            applyAircraftMetadata(target);
+                        }
+                        has_air_state = fetched_air.aircraft_count > 0;
+                    }
+
                     success = true;
                     snprintf(message, sizeof(message), "JSON OK");
                 }
@@ -321,7 +535,12 @@ void fetchTask(void *param)
             client->finishFetch(success, http_code, payload.length(), message, active_tab, list_count, item_count,
                                 has_list_state ? fetched_list_state : nullptr, fetched_list_cache,
                                 fetched_list_cache_count, generated_at,
-                                has_weather_state ? &fetched_weather : nullptr);
+                                has_weather_state ? &fetched_weather : nullptr,
+                                has_meal_week_state ? &fetched_meal_week : nullptr,
+                                has_metro_state ? &fetched_metro : nullptr,
+                                has_settings ? &fetched_settings : nullptr,
+                                has_iss_state ? &fetched_iss : nullptr,
+                                has_air_state ? &fetched_air : nullptr);
         }
     }
 }
@@ -330,8 +549,8 @@ void fetchTask(void *param)
 
 void ListeFrigoApi::begin()
 {
-    if (!HAS_EPAPER_TOKEN) {
-        Serial.println("API: EPAPER_BYPASS_TOKEN absent dans secrets.h, client en attente");
+    if (!HAS_SUPERVIE_ACCESS_CODE) {
+        Serial.println("API: SUPERVIE_ACCESS_CODE absent dans secrets.h, client en attente");
         state = API_DISABLED;
         return;
     }
@@ -423,6 +642,46 @@ bool ListeFrigoApi::takeWeatherState(WeatherState &target)
     if (!weather_state_available) return false;
     target = result_weather_state;
     weather_state_available = false;
+    return true;
+}
+
+bool ListeFrigoApi::takeMealWeekState(MealWeekState &target)
+{
+    if (!meal_week_state_available) return false;
+    target = result_meal_week_state;
+    meal_week_state_available = false;
+    return true;
+}
+
+bool ListeFrigoApi::takeMetroState(MetroState &target)
+{
+    if (!metro_state_available) return false;
+    target = result_metro_state;
+    metro_state_available = false;
+    return true;
+}
+
+bool ListeFrigoApi::takeEpaperSettings(EpaperSettings &target)
+{
+    if (!epaper_settings_available) return false;
+    target = result_epaper_settings;
+    epaper_settings_available = false;
+    return true;
+}
+
+bool ListeFrigoApi::takeIssState(IssState &target)
+{
+    if (!iss_state_available) return false;
+    target = result_iss_state;
+    iss_state_available = false;
+    return true;
+}
+
+bool ListeFrigoApi::takeAirState(AirState &target)
+{
+    if (!air_state_available) return false;
+    target = result_air_state;
+    air_state_available = false;
     return true;
 }
 
@@ -527,7 +786,9 @@ void ListeFrigoApi::finishFetch(bool success, int http_code, size_t bytes, const
                                 const char *active_tab, uint32_t list_count, uint32_t item_count,
                                 const ListPageState *list_state, const ListPageState *list_cache,
                                 int8_t list_cache_count, const char *generated_at,
-                                const WeatherState *weather_state)
+                                const WeatherState *weather_state, const MealWeekState *meal_week_state,
+                                const MetroState *metro_state, const EpaperSettings *settings,
+                                const IssState *iss_state, const AirState *air_state)
 {
     result_http_code = http_code;
     result_bytes = bytes;
@@ -540,6 +801,16 @@ void ListeFrigoApi::finishFetch(bool success, int http_code, size_t bytes, const
     generated_at_available = success && result_generated_at[0] != '\0';
     weather_state_available = success && weather_state != nullptr;
     if (weather_state_available) result_weather_state = *weather_state;
+    meal_week_state_available = success && meal_week_state != nullptr;
+    if (meal_week_state_available) result_meal_week_state = *meal_week_state;
+    metro_state_available = success && metro_state != nullptr;
+    if (metro_state_available) result_metro_state = *metro_state;
+    epaper_settings_available = success && settings != nullptr;
+    if (epaper_settings_available) result_epaper_settings = *settings;
+    iss_state_available = success && iss_state != nullptr;
+    if (iss_state_available) result_iss_state = *iss_state;
+    air_state_available = success && air_state != nullptr;
+    if (air_state_available) result_air_state = *air_state;
     result_has_list_state = success && list_state != nullptr;
     if (result_has_list_state) {
         result_list_state = *list_state;

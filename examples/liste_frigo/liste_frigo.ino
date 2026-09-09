@@ -16,6 +16,7 @@
 #include "ListeFrigoTouch.h"
 #include "ListeFrigoWifi.h"
 #include "ListeFrigoApi.h"
+#include "ListeFrigoOta.h"
 
 constexpr uint32_t CHECKBOX_REFRESH_IDLE_MS = 800;
 constexpr uint32_t SCROLL_REFRESH_IDLE_MS = 900;
@@ -24,10 +25,12 @@ ListeFrigoDisplay display;
 ListeFrigoTouch touch_nav;
 ListeFrigoWifi wifi;
 ListeFrigoApi api;
+ListeFrigoOta ota;
 Preferences preferences;
 SensorPCF8563 rtc;
 bool rtc_online = false;
 int8_t weather_display_hour = -1;
+int8_t meal_display_slot = -1;
 uint32_t next_weather_clock_poll_ms = 0;
 NavTabId active_tab = TAB_LISTES;
 uint32_t last_preview_ms = 0;
@@ -117,6 +120,14 @@ ListPageState list_state = {
     0,
 };
 WeatherState weather_state = {};
+MealWeekState meal_week_state = {};
+MetroState metro_state = {};
+EpaperSettings epaper_settings = {{TAB_LISTES, TAB_CRECHE, TAB_METEO, TAB_REPAS, TAB_METRO, TAB_ISS, TAB_AIR}, NAV_VISIBLE_TAB_MAX, TAB_LISTES, false, 120};
+bool epaper_settings_received = false;
+IssState iss_state = {};
+AirState air_state = {};
+int8_t selected_aircraft_index = -1;
+uint32_t last_carousel_ms = 0;
 
 int8_t daysInMonth(int year, int month)
 {
@@ -132,6 +143,19 @@ int8_t dayOfWeek(int year, int month, int day)
     static const int8_t month_offsets[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
     year -= month < 3;
     return (year + year / 4 - year / 100 + year / 400 + month_offsets[month - 1] + day) % 7;
+}
+
+int8_t mealDayIndex(int year, int month, int day)
+{
+    return (dayOfWeek(year, month, day) + 5) % 7;
+}
+
+int8_t nextMealSlot(const RTC_DateTime &now)
+{
+    int8_t slot = mealDayIndex(now.getYear(), now.getMonth(), now.getDay()) * 2;
+    if (now.getHour() >= 21) return (slot + 2) % WEEK_MEAL_COUNT;
+    if (now.getHour() >= 14) return (slot + 1) % WEEK_MEAL_COUNT;
+    return slot;
 }
 
 int8_t lastSundayOfMonth(int year, int month)
@@ -174,12 +198,14 @@ bool refreshWeatherClock()
 {
     if (!rtc_online) {
         display.setWeatherTime(0, 0, false);
+        display.setMealTime(0, 0, false);
         return false;
     }
 
     const RTC_DateTime now = rtc.getDateTime();
     const bool valid = now.getYear() >= 2024 && now.getHour() < 24 && now.getMinute() < 60;
     display.setWeatherTime(now.getHour(), now.getMinute(), valid);
+    display.setMealTime(mealDayIndex(now.getYear(), now.getMonth(), now.getDay()), now.getHour(), valid);
     return valid;
 }
 
@@ -208,13 +234,15 @@ void pollWeatherClock()
         return;
     }
     next_weather_clock_poll_ms = millis() + 30000;
-    if (!refreshWeatherClock() || active_tab != TAB_METEO) {
+    if (!refreshWeatherClock()) {
         return;
     }
 
     const RTC_DateTime now = rtc.getDateTime();
-    if (weather_display_hour != now.getHour()) {
+    if (active_tab == TAB_METEO && weather_display_hour != now.getHour()) {
         requestPageDisplay(TAB_METEO, list_state, "heure meteo");
+    } else if (active_tab == TAB_REPAS && meal_display_slot != nextMealSlot(now)) {
+        requestPageDisplay(TAB_REPAS, list_state, "heure repas");
     }
 }
 
@@ -306,6 +334,114 @@ bool sameWeatherState(const WeatherState &a, const WeatherState &b)
     return true;
 }
 
+bool sameMealWeekState(const MealWeekState &a, const MealWeekState &b)
+{
+    if (a.available != b.available || a.meal_count != b.meal_count) return false;
+    for (int8_t i = 0; i < a.meal_count; ++i) {
+        if (a.meals[i].day_index != b.meals[i].day_index || a.meals[i].lunch != b.meals[i].lunch ||
+            strcmp(a.meals[i].label, b.meals[i].label) != 0) return false;
+    }
+    return true;
+}
+
+bool sameMetroState(const MetroState &a, const MetroState &b)
+{
+    if (a.available != b.available || a.line_count != b.line_count || strcmp(a.updated_at, b.updated_at) != 0) return false;
+    for (int8_t i = 0; i < a.line_count; ++i) {
+        const MetroLine &left = a.lines[i];
+        const MetroLine &right = b.lines[i];
+        if (strcmp(left.label, right.label) != 0 || strcmp(left.stop, right.stop) != 0 ||
+            left.metro != right.metro || left.available != right.available || left.direction_count != right.direction_count) return false;
+        for (int8_t direction = 0; direction < left.direction_count; ++direction) {
+            const MetroDirection &left_direction = left.directions[direction];
+            const MetroDirection &right_direction = right.directions[direction];
+            if (strcmp(left_direction.destination, right_direction.destination) != 0 ||
+                left_direction.passage_count != right_direction.passage_count) return false;
+            for (int8_t passage = 0; passage < left_direction.passage_count; ++passage) {
+                if (left_direction.minutes[passage] != right_direction.minutes[passage]) return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool sameEpaperSettings(const EpaperSettings &a, const EpaperSettings &b)
+{
+    if (a.visible_tab_count != b.visible_tab_count || a.preferred_tab != b.preferred_tab ||
+        a.carousel_enabled != b.carousel_enabled || a.carousel_interval_seconds != b.carousel_interval_seconds) return false;
+    for (int8_t i = 0; i < a.visible_tab_count; ++i) {
+        if (a.visible_tabs[i] != b.visible_tabs[i]) return false;
+    }
+    return true;
+}
+
+bool sameIssState(const IssState &a, const IssState &b)
+{
+    if (a.available != b.available || strcmp(a.over, b.over) != 0 || a.speed_kmh != b.speed_kmh || a.distance_km != b.distance_km ||
+        a.map_x != b.map_x || a.map_y != b.map_y || a.track_count != b.track_count) return false;
+    for (int8_t i = 0; i < a.track_count; ++i) {
+        if (a.track[i].x != b.track[i].x || a.track[i].y != b.track[i].y) return false;
+    }
+    return true;
+}
+
+bool sameAirState(const AirState &a, const AirState &b)
+{
+    if (a.available != b.available || a.radius_km != b.radius_km || a.aircraft_count != b.aircraft_count) return false;
+    for (int8_t i = 0; i < a.aircraft_count; ++i) {
+        if (strcmp(a.aircraft[i].registration, b.aircraft[i].registration) != 0 || a.aircraft[i].x != b.aircraft[i].x ||
+            strcmp(a.aircraft[i].tail_number, b.aircraft[i].tail_number) != 0 ||
+            strcmp(a.aircraft[i].airline, b.aircraft[i].airline) != 0 ||
+            strcmp(a.aircraft[i].aircraft_type, b.aircraft[i].aircraft_type) != 0 ||
+            strcmp(a.aircraft[i].route, b.aircraft[i].route) != 0 ||
+            strcmp(a.aircraft[i].bearing, b.aircraft[i].bearing) != 0 ||
+            a.aircraft[i].y != b.aircraft[i].y || a.aircraft[i].heading != b.aircraft[i].heading ||
+            a.aircraft[i].altitude_m != b.aircraft[i].altitude_m ||
+            a.aircraft[i].speed_kmh != b.aircraft[i].speed_kmh ||
+            a.aircraft[i].distance_km != b.aircraft[i].distance_km) return false;
+    }
+    return true;
+}
+
+bool isVisibleTab(NavTabId tab)
+{
+    for (int8_t i = 0; i < epaper_settings.visible_tab_count && i < NAV_VISIBLE_TAB_MAX; ++i) {
+        if (epaper_settings.visible_tabs[i] == tab) return true;
+    }
+    return false;
+}
+
+NavTabId tabAtNavIndex(int8_t nav_index)
+{
+    if (nav_index < 0) nav_index = 0;
+    if (nav_index >= epaper_settings.visible_tab_count) nav_index = epaper_settings.visible_tab_count - 1;
+    if (nav_index < 0) return TAB_LISTES;
+    return epaper_settings.visible_tabs[nav_index];
+}
+
+NavTabId nextCarouselTab()
+{
+    int8_t current_index = -1;
+    for (int8_t i = 0; i < epaper_settings.visible_tab_count; ++i) {
+        if (epaper_settings.visible_tabs[i] == active_tab) {
+            current_index = i;
+            break;
+        }
+    }
+    return epaper_settings.visible_tabs[(current_index + 1) % epaper_settings.visible_tab_count];
+}
+
+void switchToTab(NavTabId target_tab, const char *reason, const char *preview)
+{
+    if (target_tab == TAB_NONE) return;
+    active_tab = target_tab;
+    list_picker_open = false;
+    last_carousel_ms = millis();
+    requestPageDisplay(active_tab, list_state, reason);
+    emitPreviewState(preview);
+    Serial.printf("Liste Frigo: navigation -> %s\n", navSerialName(target_tab));
+}
+
 void applyApiListState()
 {
     char generated_at[32] = {0};
@@ -324,6 +460,79 @@ void applyApiListState()
         Serial.printf("METEO: recue %s, heures=%d\n", weather_state.location, weather_state.hourly_count);
         if (weather_changed && (active_tab == TAB_METEO || active_tab == TAB_CRECHE)) {
             requestPageDisplay(active_tab, list_state, "meteo actualisee");
+        }
+    }
+
+    MealWeekState remote_meal_week = {};
+    if (api.takeMealWeekState(remote_meal_week)) {
+        const bool meals_changed = !sameMealWeekState(meal_week_state, remote_meal_week);
+        meal_week_state = remote_meal_week;
+        display.setMealWeekState(meal_week_state);
+        Serial.printf("REPAS: recus, entrees=%d\n", meal_week_state.meal_count);
+        if (meals_changed && active_tab == TAB_REPAS) {
+            requestPageDisplay(TAB_REPAS, list_state, "repas actualises");
+        }
+    }
+
+    MetroState remote_metro = {};
+    if (api.takeMetroState(remote_metro)) {
+        const bool metro_changed = !sameMetroState(metro_state, remote_metro);
+        metro_state = remote_metro;
+        display.setMetroState(metro_state);
+        Serial.printf("METRO: recu lignes=%d\n", metro_state.line_count);
+        if (metro_changed && active_tab == TAB_METRO) {
+            requestPageDisplay(TAB_METRO, list_state, "metro actualise");
+        }
+    }
+
+    EpaperSettings remote_settings = {};
+    if (api.takeEpaperSettings(remote_settings)) {
+        const bool first_settings = !epaper_settings_received;
+        if (remote_settings.visible_tab_count <= 0) {
+            memcpy(remote_settings.visible_tabs, epaper_settings.visible_tabs, sizeof(remote_settings.visible_tabs));
+            remote_settings.visible_tab_count = epaper_settings.visible_tab_count;
+        }
+        const bool settings_changed = !sameEpaperSettings(epaper_settings, remote_settings);
+        epaper_settings = remote_settings;
+        epaper_settings_received = true;
+        display.setEpaperSettings(epaper_settings);
+        Serial.printf("REGLAGES: onglets=%d carrousel=%s intervalle=%u\n",
+                      epaper_settings.visible_tab_count,
+                      epaper_settings.carousel_enabled ? "on" : "off",
+                      epaper_settings.carousel_interval_seconds);
+        if (!isVisibleTab(active_tab)) {
+            switchToTab(epaper_settings.preferred_tab != TAB_NONE && isVisibleTab(epaper_settings.preferred_tab)
+                            ? epaper_settings.preferred_tab : tabAtNavIndex(0),
+                        "reglages onglet masque", "reglages_onglet_masque");
+        } else if (first_settings && epaper_settings.preferred_tab != TAB_NONE && epaper_settings.preferred_tab != active_tab &&
+                   isVisibleTab(epaper_settings.preferred_tab)) {
+            switchToTab(epaper_settings.preferred_tab, "reglages onglet actif", "reglages_onglet_actif");
+        } else if (settings_changed) {
+            requestPageDisplay(active_tab, list_state, "reglages actualises");
+        }
+    }
+
+    IssState remote_iss = {};
+    if (api.takeIssState(remote_iss)) {
+        const bool iss_changed = !sameIssState(iss_state, remote_iss);
+        iss_state = remote_iss;
+        display.setIssState(iss_state);
+        Serial.printf("ISS: recue vitesse=%u over=%s\n", iss_state.speed_kmh, iss_state.over);
+        if (iss_changed && active_tab == TAB_ISS) {
+            requestPageDisplay(TAB_ISS, list_state, "iss actualisee");
+        }
+    }
+
+    AirState remote_air = {};
+    if (api.takeAirState(remote_air)) {
+        const bool air_changed = !sameAirState(air_state, remote_air);
+        air_state = remote_air;
+        if (selected_aircraft_index >= air_state.aircraft_count) selected_aircraft_index = -1;
+        display.setAirState(air_state);
+        display.setSelectedAircraft(selected_aircraft_index);
+        Serial.printf("AIR: recu avions=%d\n", air_state.aircraft_count);
+        if (air_changed && active_tab == TAB_AIR) {
+            requestPageDisplay(TAB_AIR, list_state, "air actualise");
         }
     }
 
@@ -406,10 +615,14 @@ void requestPageDisplay(NavTabId tab, const ListPageState &state, const char *re
         Serial.printf("DISPLAY request superseded: %s -> %s\n", navSerialName(page_display_tab), navSerialName(tab));
     }
     page_display_tab = tab;
-    if (tab == TAB_METEO) {
+    if (tab == TAB_METEO || tab == TAB_REPAS) {
         refreshWeatherClock();
+    }
+    if (tab == TAB_METEO) {
         display.setWeatherState(weather_state);
         weather_display_hour = rtc_online ? rtc.getDateTime().getHour() : -1;
+    } else if (tab == TAB_REPAS) {
+        meal_display_slot = rtc_online ? nextMealSlot(rtc.getDateTime()) : -1;
     }
     page_display_state = state;
     page_display_keyboard = false;
@@ -737,13 +950,33 @@ bool scrollListBy(int8_t delta)
     return true;
 }
 
+bool toggleListItem(int8_t item_index)
+{
+    if (item_index < 0 || item_index >= list_state.item_count) {
+        return false;
+    }
+
+    GroceryItem &item = list_state.items[item_index];
+    const bool checked = !item.checked;
+    if (!api.sendToggleItem(item.id, checked)) {
+        Serial.println("Liste Frigo: coche ignoree, synchronisation API indisponible");
+        return false;
+    }
+
+    item.checked = checked;
+    Serial.printf("Liste Frigo: item %s -> %s\n", item.label, checked ? "coche" : "decoche");
+    const int8_t visible_row = item_index - list_state.scroll_offset;
+    scheduleListPreview(visible_row);
+    Serial.printf("Liste Frigo: coche en attente affichage ligne=%d\n", visible_row);
+    emitPreviewState("toggle");
+    return true;
+}
+
 bool handleListGesture(const TouchEvent &event)
 {
     if (active_tab != TAB_LISTES) {
         return false;
     }
-
-    const int8_t max_offset = max<int8_t>(0, list_state.item_count - VISIBLE_LIST_ROWS);
 
     if (event.kind == TOUCH_SWIPE_UP) {
         return scrollListBy(1);
@@ -788,19 +1021,7 @@ bool handleListGesture(const TouchEvent &event)
         return false;
     }
 
-    list_state.items[item_index].checked = !list_state.items[item_index].checked;
-    const bool checked = list_state.items[item_index].checked;
-    Serial.printf(
-        "Liste Frigo: item %s -> %s\n",
-        list_state.items[item_index].label,
-        checked ? "coche" : "decoche"
-    );
-    const int8_t visible_row = item_index - list_state.scroll_offset;
-    scheduleListPreview(visible_row);
-    Serial.printf("Liste Frigo: coche en attente affichage ligne=%d\n", visible_row);
-    emitPreviewState("toggle");
-    api.sendToggleItem(list_state.items[item_index].id, checked);
-    return true;
+    return toggleListItem(item_index);
 }
 
 int8_t listPickerIndexAt(int16_t logical_x, int16_t logical_y)
@@ -813,6 +1034,30 @@ int8_t listPickerIndexAt(int16_t logical_x, int16_t logical_y)
     return index >= 0 && index < list_state.list_count && logical_y <= row_y + 70 ? index : -1;
 }
 
+int8_t aircraftIndexAt(int16_t logical_x, int16_t logical_y)
+{
+    int8_t nearest = -1;
+    int32_t nearest_distance_squared = 42 * 42 + 1;
+    for (int8_t i = 0; i < air_state.aircraft_count && i < AIRCRAFT_COUNT; ++i) {
+        const Aircraft &plane = air_state.aircraft[i];
+        const int32_t x = 52 + plane.x * 436 / 255;
+        const int32_t y = 154 + plane.y * 520 / 255;
+        const int32_t dx = logical_x - x;
+        const int32_t dy = logical_y - y;
+        const int32_t distance_squared = dx * dx + dy * dy;
+        if (distance_squared < nearest_distance_squared) {
+            nearest = i;
+            nearest_distance_squared = distance_squared;
+        }
+
+        const int32_t label_width = min<int32_t>(100, strlen(plane.registration) * 12);
+        const int32_t label_x = x + 16 + label_width <= LOGICAL_WIDTH - 18 ? x + 16 : x - label_width - 16;
+        if (logical_x >= label_x - 6 && logical_x <= label_x + label_width + 6 &&
+            logical_y >= y - 18 && logical_y <= y + 16) return i;
+    }
+    return nearest;
+}
+
 void handleReadOnlyTouch()
 {
     TouchEvent event;
@@ -821,29 +1066,59 @@ void handleReadOnlyTouch()
     }
 
     logTouchEvent(event);
-    if (event.logical_y >= 842) {
-        const NavTabId target_tab = event.logical_x < LOGICAL_WIDTH / 3
-            ? TAB_LISTES
-            : event.logical_x < (LOGICAL_WIDTH * 2) / 3 ? TAB_CRECHE : TAB_METEO;
+    if (event.logical_y >= NAV_TOP && event.logical_y < NAV_TOP + NAV_HEIGHT &&
+        event.logical_x >= NAV_LEFT && event.logical_x < NAV_LEFT + NAV_WIDTH) {
+        const int8_t nav_count = max<int8_t>(1, epaper_settings.visible_tab_count);
+        const int32_t available_width = NAV_WIDTH - (nav_count - 1) * NAV_GAP;
+        const int32_t item_width = available_width / nav_count;
+        const int32_t remainder = available_width % nav_count;
+        int32_t x = NAV_LEFT;
+        int8_t nav_index = -1;
+        for (int8_t index = 0; index < nav_count; ++index) {
+            const int32_t width = item_width + (index < remainder ? 1 : 0);
+            if (event.logical_x >= x && event.logical_x < x + width) {
+                nav_index = index;
+                break;
+            }
+            x += width + NAV_GAP;
+        }
+        if (nav_index < 0) return;
+        const NavTabId target_tab = tabAtNavIndex(nav_index);
         if (target_tab != active_tab || list_picker_open) {
-            active_tab = target_tab;
-            list_picker_open = false;
-            const char *reason = target_tab == TAB_METEO ? "navigation meteo"
-                : target_tab == TAB_CRECHE ? "navigation creche" : "navigation listes";
-            const char *preview = target_tab == TAB_METEO ? "navigation_meteo"
-                : target_tab == TAB_CRECHE ? "navigation_creche" : "navigation_listes";
-            requestPageDisplay(active_tab, list_state, reason);
-            emitPreviewState(preview);
-            Serial.printf("Liste Frigo: navigation bas -> %s\n", navSerialName(target_tab));
+            char reason[32] = {0};
+            char preview[32] = {0};
+            snprintf(reason, sizeof(reason), "navigation %s", navApiKey(target_tab));
+            snprintf(preview, sizeof(preview), "navigation_%s", navApiKey(target_tab));
+            switchToTab(target_tab, reason, preview);
         }
         return;
     }
 
-    if (active_tab == TAB_METEO) {
+    if (active_tab == TAB_AIR) {
+        const int8_t aircraft_index = aircraftIndexAt(event.logical_x, event.logical_y);
+        if (aircraft_index >= 0) {
+            selected_aircraft_index = aircraft_index;
+            display.setSelectedAircraft(selected_aircraft_index);
+            requestPageDisplay(TAB_AIR, list_state, "avion selectionne");
+        } else if (event.logical_x >= 24 && event.logical_x <= LOGICAL_WIDTH - 24 &&
+                   event.logical_y >= 126 && event.logical_y <= 694 && selected_aircraft_index >= 0) {
+            selected_aircraft_index = -1;
+            display.setSelectedAircraft(-1);
+            requestPageDisplay(TAB_AIR, list_state, "selection avion fermee");
+        }
+        return;
+    }
+
+    if (active_tab != TAB_LISTES) {
         return;
     }
 
     if (!list_picker_open) {
+        const int8_t item_index = listItemAt(event.logical_x, event.logical_y);
+        if (item_index >= 0) {
+            toggleListItem(item_index);
+            return;
+        }
         if (event.logical_x >= 448 && event.logical_x <= 510 && event.logical_y >= 58 && event.logical_y <= 136) {
             list_picker_open = true;
             requestListPickerDisplay(list_state);
@@ -901,6 +1176,9 @@ void setup()
     preferences.begin("liste-frigo", false);
     selected_list_id = preferences.getInt("list-id", 1);
     api.setSelectedListId(selected_list_id);
+    display.setEpaperSettings(epaper_settings);
+    display.setIssState(iss_state);
+    display.setAirState(air_state);
     if (xTaskCreatePinnedToCore(displayTask, "display_deferred", 8192, nullptr, 1, &display_task, 0) != pdPASS) {
         Serial.println("Liste Frigo: erreur creation tache affichage differe");
         while (true) {
@@ -913,12 +1191,14 @@ void setup()
     api.begin();
     requestPageDisplay(active_tab, list_state, "boot");
     emitPreviewState("boot");
+    last_carousel_ms = millis();
     wifi.begin();
 }
 
 void loop()
 {
     wifi.poll();
+    ota.poll(wifi.isConnected());
     api.poll(wifi.isConnected());
     applyApiListState();
     pollWeatherClock();
@@ -969,6 +1249,12 @@ void loop()
         display_busy = true;
         Serial.printf("Liste Frigo: coches bufferises masque=0x%02X\n", list_display_rows_mask);
         xTaskNotifyGive(display_task);
+    }
+
+    if (!keyboard_open && !list_picker_open && epaper_settings.carousel_enabled && epaper_settings.visible_tab_count > 1 &&
+        !page_display_pending && !display_busy &&
+        millis() - last_carousel_ms >= static_cast<uint32_t>(epaper_settings.carousel_interval_seconds) * 1000UL) {
+        switchToTab(nextCarouselTab(), "carrousel", "carrousel");
     }
 
     if (millis() - last_preview_ms > 5000) {
