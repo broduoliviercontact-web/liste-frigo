@@ -15,6 +15,13 @@
       "when": 1788183655355,
       "tag": "0001_gray_kulan_gath",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788985066878,
+      "tag": "0002_gigantic_prima",
+      "breakpoints": true
     }
   ]
 }

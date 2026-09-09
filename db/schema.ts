@@ -24,3 +24,17 @@ export const mealPlans = sqliteTable("meal_plans", {
   uniqueIndex("meal_plans_date_moment_unique").on(table.date, table.moment),
   index("meal_plans_date_idx").on(table.date),
 ]);
+
+export const agendaEvents = sqliteTable("agenda_events", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  date: text("date").notNull(),
+  time: text("time"),
+  title: text("title").notNull(),
+  category: text("category").notNull().default("famille"),
+  durationMinutes: integer("duration_minutes"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index("agenda_events_date_idx").on(table.date),
+  index("agenda_events_date_time_idx").on(table.date, table.time),
+]);

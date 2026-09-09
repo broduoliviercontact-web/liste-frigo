@@ -5,26 +5,18 @@ import { readTransit } from "../../../transit/route";
 import { requireSupervieAccess } from "../../../../access";
 import { readIss } from "../../../iss/route";
 import { readAirTraffic } from "../../../air/route";
-
-const compactAgenda = [
-  { day: "Lun", date: "14", items: [{ time: "08:30", label: "Crèche" }, { time: "18:15", label: "Courses" }] },
-  { day: "Mar", date: "15", items: [{ time: "09:20", label: "Pédiatre" }] },
-  { day: "Mer", date: "16", items: [{ time: "10:00", label: "Parc" }, { time: "19:30", label: "Visio" }] },
-  { day: "Jeu", date: "17", items: [{ time: "17:00", label: "Nounou" }] },
-  { day: "Ven", date: "18", items: [{ time: "08:45", label: "Crèche" }, { time: "20:00", label: "Dîner" }] },
-  { day: "Sam", date: "19", items: [{ time: "11:00", label: "Marché" }] },
-  { day: "Dim", date: "20", items: [{ time: "", label: "Famille" }] },
-];
+import { readWeekAgenda } from "../../../agenda/route";
 
 export async function GET(request: Request) {
   try {
     const denied = await requireSupervieAccess(request);
     if (denied) return denied;
-    const [lists, weather, meals, transit, iss, air] = await Promise.all([
+    const [lists, weather, meals, transit, agenda, iss, air] = await Promise.all([
       readAll(),
       readPantinWeather(),
       readWeekMeals(),
       readTransit(),
+      readWeekAgenda(),
       readIss().catch(() => ({
         status: "unavailable" as const,
         updatedAt: new Date().toISOString(),
@@ -64,7 +56,21 @@ export async function GET(request: Request) {
         agenda: {
           status: "ready",
           mode: "compact-week",
-          days: compactAgenda,
+          monday: agenda.monday,
+          sunday: agenda.sunday,
+          today: agenda.today,
+          eventCount: agenda.eventCount,
+          upcoming: agenda.upcoming.slice(0, 2),
+          days: agenda.days.map((day) => ({
+            date: day.date,
+            dayIndex: day.dayIndex,
+            items: day.events.slice(0, 2).map((event) => ({
+              time: event.time,
+              label: event.title,
+              category: event.category,
+            })),
+            overflow: Math.max(0, day.events.length - 2),
+          })),
         },
         metro: {
           status: "ready",

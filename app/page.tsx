@@ -5,6 +5,25 @@ import { CSSProperties, FormEvent, useCallback, useEffect, useRef, useState } fr
 type Item = { id: number; label: string; checked: boolean };
 type ShoppingList = { id: number; name: string; items: Item[] };
 type Meal = { id: number; date: string; moment: "midi" | "soir"; label: string };
+type AgendaEvent = {
+  id: number;
+  date: string;
+  dayIndex: number;
+  time: string;
+  title: string;
+  category: string;
+  durationMinutes: number | null;
+};
+type AgendaDay = { date: string; dayIndex: number; events: AgendaEvent[] };
+type AgendaState = {
+  monday: string;
+  sunday: string;
+  today: string;
+  eventCount: number;
+  events: AgendaEvent[];
+  upcoming: AgendaEvent[];
+  days: AgendaDay[];
+};
 type TabId = "lists" | "creche" | "meteo" | "meals" | "metro" | "agenda" | "settings" | "iss" | "air";
 type EpaperSettings = {
   visibleTabs: TabId[];
@@ -524,49 +543,152 @@ function MealPlannerPage({ settings, onTab }: { settings: EpaperSettings; onTab:
   </div>;
 }
 
-const compactWeekEvents = [
-  { day: "Lun", date: "14", items: [{ time: "08:30", label: "Crèche" }, { time: "18:15", label: "Courses" }] },
-  { day: "Mar", date: "15", items: [{ time: "09:20", label: "Pédiatre" }] },
-  { day: "Mer", date: "16", items: [{ time: "10:00", label: "Parc" }, { time: "19:30", label: "Visio" }] },
-  { day: "Jeu", date: "17", items: [{ time: "17:00", label: "Nounou" }] },
-  { day: "Ven", date: "18", items: [{ time: "08:45", label: "Crèche" }, { time: "20:00", label: "Dîner" }] },
-  { day: "Sam", date: "19", items: [{ time: "11:00", label: "Marché" }] },
-  { day: "Dim", date: "20", items: [{ time: "", label: "Famille" }] },
+const agendaCategoryOptions = [
+  { id: "famille", label: "Famille", mark: "F" },
+  { id: "creche", label: "Crèche", mark: "C" },
+  { id: "sante", label: "Santé", mark: "S" },
+  { id: "maison", label: "Maison", mark: "M" },
+  { id: "travail", label: "Travail", mark: "T" },
 ];
 
+function agendaCategoryLabel(category: string) {
+  return agendaCategoryOptions.find((option) => option.id === category)?.label ?? "Famille";
+}
+
+function agendaCategoryMark(category: string) {
+  return agendaCategoryOptions.find((option) => option.id === category)?.mark ?? "F";
+}
+
 function AgendaPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: TabId) => void }) {
-  const today = compactWeekEvents[1];
-  const tomorrow = compactWeekEvents[2];
-  const eventCount = compactWeekEvents.reduce((total, day) => total + day.items.length, 0);
+  const [agenda, setAgenda] = useState<AgendaState | null>(null);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [draft, setDraft] = useState({ title: "", time: "", category: "famille", durationMinutes: "60" });
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "saving" | "error">("loading");
+
+  const loadAgenda = useCallback(async () => {
+    try {
+      const response = await fetch("/api/agenda", { cache: "no-store" });
+      if (!response.ok) throw new Error("agenda");
+      const data = await response.json() as AgendaState;
+      setAgenda(data);
+      setSelectedDate((current) => current || data.today || data.monday);
+      setState("ready");
+    } catch { setState("error"); }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadAgenda(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadAgenda]);
+
+  const days = agenda?.days ?? [];
+  const selectedDay = selectedDate || agenda?.today || agenda?.monday || "";
+  const selectedEvents = days.find((day) => day.date === selectedDay)?.events ?? [];
+  const upcoming = agenda?.upcoming ?? [];
+
+  function resetDraft() {
+    setDraft({ title: "", time: "", category: "famille", durationMinutes: "60" });
+    setEditingId(null);
+  }
+
+  function editEvent(event: AgendaEvent) {
+    setSelectedDate(event.date);
+    setEditingId(event.id);
+    setDraft({
+      title: event.title,
+      time: event.time,
+      category: event.category,
+      durationMinutes: String(event.durationMinutes ?? 60),
+    });
+  }
+
+  async function saveEvent(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedDay) return;
+    setState("saving");
+    try {
+      const response = await fetch("/api/agenda", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: editingId ? "update" : "create",
+          id: editingId ?? undefined,
+          date: selectedDay,
+          time: draft.time,
+          title: draft.title,
+          category: draft.category,
+          durationMinutes: Number(draft.durationMinutes) || null,
+        }),
+      });
+      if (!response.ok) throw new Error("save");
+      const data = await response.json() as AgendaState;
+      setAgenda(data);
+      resetDraft();
+      setState("ready");
+    } catch { setState("error"); }
+  }
+
+  async function deleteEvent(id: number) {
+    setState("saving");
+    try {
+      const response = await fetch("/api/agenda", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", id }),
+      });
+      if (!response.ok) throw new Error("delete");
+      const data = await response.json() as AgendaState;
+      setAgenda(data);
+      if (editingId === id) resetDraft();
+      setState("ready");
+    } catch { setState("error"); }
+  }
 
   return <div className="agenda-page">
     <header className="agenda-header">
       <div><p className="eyebrow">SUPERVIE · AGENDA</p><h1>Semaine compacte</h1></div>
-      <strong>{eventCount}</strong>
+      <strong>{agenda?.eventCount ?? 0}</strong>
     </header>
     <section className="agenda-focus" aria-label="Prochains moments">
-      <article>
-        <span>Aujourd&apos;hui</span>
-        <strong>{today.items[0].time}</strong>
-        <p>{today.items[0].label}</p>
-      </article>
-      <article>
-        <span>Demain</span>
-        <strong>{tomorrow.items[0].time}</strong>
-        <p>{tomorrow.items[0].label}</p>
-      </article>
+      {(upcoming.length ? upcoming.slice(0, 2) : [null, null]).map((event, index) => <article key={event?.id ?? `empty-${index}`}>
+        <span>{index === 0 ? "Prochain" : "Ensuite"}</span>
+        <strong>{event?.time || "--:--"}</strong>
+        <p>{event?.title ?? "À planifier"}</p>
+      </article>)}
     </section>
-    <section className="compact-week" aria-label="Vue compacte de la semaine">
-      {compactWeekEvents.map((day, index) => <article key={day.day} className={index === 1 ? "today" : ""}>
-        <header><span>{day.day}</span><strong>{day.date}</strong></header>
+    <section className="agenda-editor" aria-label="Edition agenda">
+      <div className="agenda-days">
+        {days.map((day) => <button key={day.date} className={day.date === selectedDay ? "active" : ""} onClick={() => setSelectedDate(day.date)}>
+          <small>{mealDayLabel(day.date, true)}</small><strong>{day.date.slice(-2)}</strong><i>{day.events.length || ""}</i>
+        </button>)}
+      </div>
+      <form className="agenda-form" onSubmit={saveEvent}>
+        <label><span>Titre</span><input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Pédiatre, crèche, courses..." maxLength={80} /></label>
         <div>
-          {day.items.slice(0, 2).map((item) => <p key={`${day.day}-${item.time}-${item.label}`}>
-            {item.time && <time>{item.time}</time>}<span>{item.label}</span>
+          <label><span>Heure</span><input type="time" value={draft.time} onChange={(event) => setDraft((current) => ({ ...current, time: event.target.value }))} /></label>
+          <label><span>Durée</span><input type="number" min="15" max="720" step="15" value={draft.durationMinutes} onChange={(event) => setDraft((current) => ({ ...current, durationMinutes: event.target.value }))} /></label>
+          <label><span>Catégorie</span><select value={draft.category} onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value }))}>{agendaCategoryOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
+        </div>
+        <button type="submit">{editingId ? "Modifier" : "Ajouter"}</button>
+        {editingId && <button type="button" onClick={resetDraft}>Annuler</button>}
+      </form>
+      <div className="agenda-day-list">
+        {selectedEvents.length ? selectedEvents.map((event) => <article key={event.id}>
+          <button type="button" onClick={() => editEvent(event)}><time>{event.time || "Jour"}</time><strong>{event.title}</strong><span>{agendaCategoryLabel(event.category)}</span></button>
+          <button type="button" onClick={() => void deleteEvent(event.id)} aria-label={`Supprimer ${event.title}`}>×</button>
+        </article>) : <p>Rien prévu ce jour.</p>}
+      </div>
+    </section>
+    <section className="compact-week" aria-label="Aperçu e-paper de la semaine">
+      {days.map((day) => <article key={day.date} className={day.date === agenda?.today ? "today" : ""}>
+        <header><span>{mealDayLabel(day.date, true)}</span><strong>{day.date.slice(-2)}</strong></header>
+        <div>
+          {(day.events.length ? day.events.slice(0, 2) : [{ id: -day.dayIndex, time: "", title: "Libre", category: "famille" }]).map((event) => <p key={event.id}>
+            {event.time && <time>{event.time}</time>}<span><b>{agendaCategoryMark(event.category)}</b>{event.title}</span>
           </p>)}
         </div>
       </article>)}
     </section>
-    <p className="agenda-note"><span /> 2 lignes max par jour · pensée pour l&apos;e-paper</p>
+    <p className={`agenda-note ${state}`}><span /> {state === "error" ? "Synchronisation indisponible" : state === "saving" ? "Enregistrement..." : "2 lignes max par jour · e-paper prêt"}</p>
     <AppNav active="agenda" settings={settings} onChange={onTab} />
   </div>;
 }

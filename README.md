@@ -142,11 +142,11 @@ Les reglages sont stockes dans `localStorage` sous `supervie-epaper-settings`. I
 
 `Agenda`
 
-- Prototype visuel seulement.
-- Donnees statiques: `compactWeekEvents` dans `app/page.tsx`.
-- Objectif UX: tester une grille hebdo tres dense mais lisible sur e-paper.
-- Regle actuelle: 7 colonnes, 2 evenements max par jour, plus focus Aujourd'hui/Demain.
-- Prochaine etape naturelle: creer une table `agenda_events` ou brancher Google Calendar.
+- Source: `/api/agenda`.
+- Table persistante: `agenda_events`.
+- Edition web: choix du jour, creation, modification et suppression d'evenements.
+- Champs: date, heure optionnelle, titre, categorie, duree optionnelle.
+- Affichage e-paper: 7 colonnes, 2 evenements maximum par jour, focus sur les 2 prochains evenements.
 
 `ISS`
 
@@ -234,6 +234,7 @@ La route agrege en parallele:
 - listes D1,
 - meteo Pantin,
 - repas de la semaine,
+- agenda de la semaine,
 - transports,
 - ISS,
 - air simule via `/api/air`.
@@ -379,10 +380,8 @@ Points UX pour e-paper:
 
 Priorite haute:
 
-- Brancher l'onglet Agenda sur de vraies donnees.
-- Decider la source agenda: D1 maison ou Google Calendar.
-- Ajouter `agenda` dans le contrat `/api/epaper/v1/state`.
 - Porter le rendu Agenda dans le firmware.
+- Ajouter des evenements recurrents si le besoin apparait.
 
 Priorite moyenne:
 
