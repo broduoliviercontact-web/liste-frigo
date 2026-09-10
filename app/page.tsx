@@ -810,9 +810,12 @@ function projectIssTrack(track: IssState["track"]) {
 
 function IssPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: TabId) => void }) {
   const iss = useIssState();
+  const currentTrackPoint = typeof iss.latitude === "number" && typeof iss.longitude === "number"
+    ? { latitude: iss.latitude, longitude: iss.longitude }
+    : null;
   const futureTrackSegments = projectIssTrack(iss.futureTrack ?? iss.track);
-  const pastTrackSegments = projectIssTrack(iss.pastTrack ? [...iss.pastTrack].reverse() : undefined);
-  const issPoint = iss.status === "ready" && typeof iss.latitude === "number" && typeof iss.longitude === "number"
+  const pastTrackSegments = projectIssTrack(iss.pastTrack && currentTrackPoint ? [currentTrackPoint, ...[...iss.pastTrack].reverse()] : undefined);
+  const issPoint = iss.status === "ready" && currentTrackPoint
     ? projectWorldPoint(iss.longitude, iss.latitude)
     : null;
   const speed = typeof iss.speedKmh === "number" ? new Intl.NumberFormat("fr-FR").format(iss.speedKmh) : "—";
