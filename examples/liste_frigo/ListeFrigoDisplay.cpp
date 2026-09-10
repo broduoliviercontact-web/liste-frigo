@@ -739,45 +739,88 @@ void ListeFrigoDisplay::drawAgendaPage()
     }
 
     fillRect(32, 326, LOGICAL_WIDTH - 64, 4, BLACK);
-    constexpr int32_t row_x = 52;
-    constexpr int32_t row_w = 436;
-    constexpr int32_t day_w = 84;
-    constexpr int32_t row_h = 56;
-    constexpr int32_t row_gap = 8;
-    constexpr int32_t row_top = 350;
-    for (int8_t index = 0; index < AGENDA_DAY_COUNT; ++index) {
-        const int32_t y = row_top + index * (row_h + row_gap);
-        const AgendaDay *day = index < agenda_state.day_count ? &agenda_state.days[index] : nullptr;
-        const bool today = day && day->today;
-        drawRect(row_x, y, row_w, row_h, 2, BLACK);
-        if (today) fillRect(row_x, y, day_w, row_h, BLACK);
-        const uint8_t day_ink = today ? WHITE : BLACK;
-        const uint8_t day_index = day ? day->day_index % AGENDA_DAY_COUNT : index;
-        drawText(row_x + 12, y + 8, AGENDA_DAY_LABELS[day_index], 1, day_ink);
-        char day_number[4] = {0};
-        if (day && day->day_of_month > 0) snprintf(day_number, sizeof(day_number), "%02u", day->day_of_month);
-        else strlcpy(day_number, "--", sizeof(day_number));
-        drawText(row_x + 25, y + 26, day_number, 3, day_ink);
-        fillRect(row_x + day_w, y, 2, row_h, BLACK);
+    if (agenda_state.vertical_layout) {
+        constexpr int32_t grid_x = 32;
+        constexpr int32_t grid_y = 350;
+        constexpr int32_t grid_w = LOGICAL_WIDTH - 64;
+        constexpr int32_t grid_h = 438;
+        constexpr int32_t day_w = grid_w / AGENDA_DAY_COUNT;
+        for (int8_t index = 0; index < AGENDA_DAY_COUNT; ++index) {
+            const int32_t x = grid_x + index * day_w;
+            const int32_t w = index == AGENDA_DAY_COUNT - 1 ? grid_x + grid_w - x : day_w;
+            const AgendaDay *day = index < agenda_state.day_count ? &agenda_state.days[index] : nullptr;
+            const bool today = day && day->today;
+            drawRect(x, grid_y, w, grid_h, 2, BLACK);
+            if (today) fillRect(x, grid_y, w, 62, BLACK);
+            const uint8_t day_ink = today ? WHITE : BLACK;
+            const uint8_t day_index = day ? day->day_index % AGENDA_DAY_COUNT : index;
+            drawText(x + 9, grid_y + 10, AGENDA_DAY_LABELS[day_index], 1, day_ink);
+            char day_number[4] = {0};
+            if (day && day->day_of_month > 0) snprintf(day_number, sizeof(day_number), "%02u", day->day_of_month);
+            else strlcpy(day_number, "--", sizeof(day_number));
+            drawText(x + 20, grid_y + 32, day_number, 2, day_ink);
+            fillRect(x, grid_y + 62, w, 2, BLACK);
 
-        const AgendaItem *item = day && day->item_count > 0 ? &day->items[0] : nullptr;
-        const int32_t content_x = row_x + day_w + 14;
-        if (item) {
-            drawText(content_x, y + 19, item->time[0] ? item->time : "--:--", 2, BLACK);
-            const char mark[] = {agendaCategoryMark(item->category), 0};
-            drawIconCircle(content_x + 74, y + 27, 8, BLACK, 1);
-            drawText(content_x + 70, y + 22, mark, 1, BLACK);
-            drawTextLimited(content_x + 96, y + 19, item->label, 2, BLACK, 220);
-            const uint8_t hidden_count = day->overflow + max<int8_t>(0, day->item_count - 1);
-            if (hidden_count > 0) {
-                char more[8] = {0};
-                snprintf(more, sizeof(more), "+%u", hidden_count);
-                drawText(row_x + row_w - 30, y + 20, more, 2, DARK);
+            const AgendaItem *item = day && day->item_count > 0 ? &day->items[0] : nullptr;
+            if (item) {
+                drawText(x + 6, grid_y + 82, item->time[0] ? item->time : "--:--", 1, BLACK);
+                const char mark[] = {agendaCategoryMark(item->category), 0};
+                drawIconCircle(x + 14, grid_y + 120, 8, BLACK, 1);
+                drawText(x + 10, grid_y + 115, mark, 1, BLACK);
+                drawTextLimited(x + 8, grid_y + 142, item->label, 1, BLACK, w - 14);
+                const uint8_t hidden_count = day->overflow + max<int8_t>(0, day->item_count - 1);
+                if (hidden_count > 0) {
+                    char more[8] = {0};
+                    snprintf(more, sizeof(more), "+%u", hidden_count);
+                    drawText(x + 8, grid_y + grid_h - 28, more, 1, DARK);
+                }
+            } else {
+                drawIconCircle(x + 14, grid_y + 88, 8, BLACK, 1);
+                drawText(x + 10, grid_y + 83, "F", 1, BLACK);
+                drawTextLimited(x + 8, grid_y + 114, "Libre", 1, BLACK, w - 14);
             }
-        } else {
-            drawIconCircle(content_x + 8, y + 27, 8, BLACK, 1);
-            drawText(content_x + 4, y + 22, "F", 1, BLACK);
-            drawTextLimited(content_x + 30, y + 19, "Libre", 2, BLACK, 280);
+        }
+    } else {
+        constexpr int32_t row_x = 52;
+        constexpr int32_t row_w = 436;
+        constexpr int32_t day_w = 84;
+        constexpr int32_t row_h = 56;
+        constexpr int32_t row_gap = 8;
+        constexpr int32_t row_top = 350;
+        for (int8_t index = 0; index < AGENDA_DAY_COUNT; ++index) {
+            const int32_t y = row_top + index * (row_h + row_gap);
+            const AgendaDay *day = index < agenda_state.day_count ? &agenda_state.days[index] : nullptr;
+            const bool today = day && day->today;
+            drawRect(row_x, y, row_w, row_h, 2, BLACK);
+            if (today) fillRect(row_x, y, day_w, row_h, BLACK);
+            const uint8_t day_ink = today ? WHITE : BLACK;
+            const uint8_t day_index = day ? day->day_index % AGENDA_DAY_COUNT : index;
+            drawText(row_x + 12, y + 8, AGENDA_DAY_LABELS[day_index], 1, day_ink);
+            char day_number[4] = {0};
+            if (day && day->day_of_month > 0) snprintf(day_number, sizeof(day_number), "%02u", day->day_of_month);
+            else strlcpy(day_number, "--", sizeof(day_number));
+            drawText(row_x + 25, y + 26, day_number, 3, day_ink);
+            fillRect(row_x + day_w, y, 2, row_h, BLACK);
+
+            const AgendaItem *item = day && day->item_count > 0 ? &day->items[0] : nullptr;
+            const int32_t content_x = row_x + day_w + 14;
+            if (item) {
+                drawText(content_x, y + 19, item->time[0] ? item->time : "--:--", 2, BLACK);
+                const char mark[] = {agendaCategoryMark(item->category), 0};
+                drawIconCircle(content_x + 74, y + 27, 8, BLACK, 1);
+                drawText(content_x + 70, y + 22, mark, 1, BLACK);
+                drawTextLimited(content_x + 96, y + 19, item->label, 2, BLACK, 220);
+                const uint8_t hidden_count = day->overflow + max<int8_t>(0, day->item_count - 1);
+                if (hidden_count > 0) {
+                    char more[8] = {0};
+                    snprintf(more, sizeof(more), "+%u", hidden_count);
+                    drawText(row_x + row_w - 30, y + 20, more, 2, DARK);
+                }
+            } else {
+                drawIconCircle(content_x + 8, y + 27, 8, BLACK, 1);
+                drawText(content_x + 4, y + 22, "F", 1, BLACK);
+                drawTextLimited(content_x + 30, y + 19, "Libre", 2, BLACK, 280);
+            }
         }
     }
     drawText(92, 818, agenda_state.available ? "Agenda synchronise - edition sur site" : "Agenda en attente", 2, DARK);

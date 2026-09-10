@@ -406,7 +406,7 @@ bool sameAirState(const AirState &a, const AirState &b)
 
 bool sameAgendaState(const AgendaState &a, const AgendaState &b)
 {
-    if (a.available != b.available || a.event_count != b.event_count ||
+    if (a.available != b.available || a.vertical_layout != b.vertical_layout || a.event_count != b.event_count ||
         a.upcoming_count != b.upcoming_count || a.day_count != b.day_count) return false;
     for (int8_t i = 0; i < a.upcoming_count; ++i) {
         if (strcmp(a.upcoming[i].time, b.upcoming[i].time) != 0 ||

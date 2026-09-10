@@ -448,6 +448,8 @@ void fetchTask(void *param)
                     JsonObject agenda = doc["pages"]["agenda"].as<JsonObject>();
                     if (strcmp(agenda["status"] | "", "ready") == 0) {
                         fetched_agenda.available = true;
+                        const char *agenda_mode = agenda["mode"] | "horizontal";
+                        fetched_agenda.vertical_layout = strcmp(agenda_mode, "vertical") == 0;
                         fetched_agenda.event_count = constrain(agenda["eventCount"] | 0, 0, 255);
                         for (JsonObject item : agenda["upcoming"].as<JsonArray>()) {
                             if (fetched_agenda.upcoming_count >= AGENDA_DAY_ITEM_MAX) break;

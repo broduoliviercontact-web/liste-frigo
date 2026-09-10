@@ -214,6 +214,7 @@ struct AgendaDay {
 
 struct AgendaState {
     bool available;
+    bool vertical_layout;
     uint8_t event_count;
     AgendaItem upcoming[AGENDA_DAY_ITEM_MAX];
     int8_t upcoming_count;
