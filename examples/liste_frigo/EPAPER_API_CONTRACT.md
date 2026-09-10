@@ -24,6 +24,16 @@ The firmware keeps working when these fields are absent. Add them to
         { "x": 12, "y": 118 },
         { "x": 62, "y": 158 },
         { "x": 126, "y": 180 }
+      ],
+      "pastTrack": [
+        { "x": 245, "y": 112 },
+        { "x": 210, "y": 146 },
+        { "x": 168, "y": 174 }
+      ],
+      "futureTrack": [
+        { "x": 245, "y": 112 },
+        { "x": 286, "y": 78 },
+        { "x": 334, "y": 55 }
       ]
     },
     "air": {
@@ -51,7 +61,9 @@ The firmware keeps working when these fields are absent. Add them to
 ```
 
 Coordinates are normalized from `0` to `255` so the website can map ISS and
-aircraft positions without knowing the physical e-paper resolution.
+aircraft positions without knowing the physical e-paper resolution. `track`
+is kept for firmware compatibility; newer firmware uses `pastTrack` for the
+dotted previous orbit and `futureTrack` for the solid predicted orbit.
 
 Supported tab keys: `listes`, `creche`, `meteo`, `repas`, `metro`, `reglages`,
 `iss`, `air`.

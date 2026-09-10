@@ -173,6 +173,10 @@ struct IssState {
     int16_t map_y;
     IssTrackPoint track[ISS_TRACK_POINT_COUNT];
     int8_t track_count;
+    IssTrackPoint past_track[ISS_TRACK_POINT_COUNT];
+    int8_t past_track_count;
+    IssTrackPoint future_track[ISS_TRACK_POINT_COUNT];
+    int8_t future_track_count;
 };
 
 struct Aircraft {

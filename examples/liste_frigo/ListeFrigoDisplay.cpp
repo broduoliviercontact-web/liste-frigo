@@ -875,6 +875,22 @@ void ListeFrigoDisplay::drawWorldMapMini(int32_t x, int32_t y, int32_t w, int32_
     drawRect(x, y, w, h, 3, gray);
 }
 
+void ListeFrigoDisplay::drawIssTrack(const IssTrackPoint *track, int8_t track_count, int32_t map_x, int32_t map_y, int32_t map_w, int32_t map_h, uint8_t gray, int32_t scale, bool dashed)
+{
+    for (int8_t i = 1; i < track_count; ++i) {
+        if (abs(track[i].x - track[i - 1].x) > 127) continue;
+        const int32_t x0 = map_x + track[i - 1].x * map_w / 255;
+        const int32_t y0 = map_y + track[i - 1].y * map_h / 255;
+        const int32_t x1 = map_x + track[i].x * map_w / 255;
+        const int32_t y1 = map_y + track[i].y * map_h / 255;
+        if (dashed) {
+            drawIconDashedLine(x0, y0, x1, y1, gray, scale, 16, 8);
+        } else {
+            drawIconLine(x0, y0, x1, y1, gray, scale);
+        }
+    }
+}
+
 void ListeFrigoDisplay::drawIssPage()
 {
     drawText(52, 34, "ISS TRACKER", 4, BLACK);
@@ -904,10 +920,11 @@ void ListeFrigoDisplay::drawIssPage()
     constexpr int32_t map_w = 436;
     constexpr int32_t map_h = 300;
     drawWorldMapMini(map_x, map_y, map_w, map_h, DARK);
-    for (int8_t i = 1; i < iss_state.track_count; ++i) {
-        if (abs(iss_state.track[i].x - iss_state.track[i - 1].x) > 127) continue;
-        drawIconLine(map_x + iss_state.track[i - 1].x * map_w / 255, map_y + iss_state.track[i - 1].y * map_h / 255,
-                     map_x + iss_state.track[i].x * map_w / 255, map_y + iss_state.track[i].y * map_h / 255, WHITE, 2);
+    if (iss_state.past_track_count > 1 || iss_state.future_track_count > 1) {
+        drawIssTrack(iss_state.past_track, iss_state.past_track_count, map_x, map_y, map_w, map_h, LIGHT, 2, true);
+        drawIssTrack(iss_state.future_track, iss_state.future_track_count, map_x, map_y, map_w, map_h, WHITE, 2, false);
+    } else {
+        drawIssTrack(iss_state.track, iss_state.track_count, map_x, map_y, map_w, map_h, WHITE, 2, false);
     }
     const int32_t home_x = map_x + 129 * map_w / 255;
     const int32_t home_y = map_y + 58 * map_h / 255;
@@ -923,8 +940,10 @@ void ListeFrigoDisplay::drawIssPage()
     }
     drawIconLine(52, 617, 82, 617, BLACK, 2);
     drawText(94, 608, "trajectoire prevue", 3, DARK);
-    drawIconFilledCircle(66, 660, 7, BLACK, 1);
-    drawText(94, 650, "ISS maintenant", 3, BLACK);
+    drawIconDashedLine(52, 660, 82, 660, DARK, 2, 10, 6);
+    drawText(94, 650, "trajectoire passee", 3, DARK);
+    drawIconFilledCircle(66, 703, 7, BLACK, 1);
+    drawText(94, 693, "ISS maintenant", 3, BLACK);
     drawText(52, 764, iss_state.available ? "Donnees synchronisees" : "Donnees ISS en attente", 2, DARK);
     drawPrimaryNavBar(TAB_ISS);
 }
@@ -1243,6 +1262,31 @@ void ListeFrigoDisplay::drawIconLine(int32_t x0, int32_t y0, int32_t x1, int32_t
             err += dx;
             y0 += sy;
         }
+    }
+}
+
+void ListeFrigoDisplay::drawIconDashedLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint8_t gray, int32_t scale, int32_t dash_length, int32_t gap_length)
+{
+    const int32_t dx = abs(x1 - x0);
+    const int32_t sx = x0 < x1 ? 1 : -1;
+    const int32_t dy = -abs(y1 - y0);
+    const int32_t sy = y0 < y1 ? 1 : -1;
+    const int32_t period = max<int32_t>(1, dash_length + gap_length);
+    int32_t err = dx + dy;
+    int32_t step = 0;
+    while (true) {
+        if (step % period < dash_length) drawIconPoint(x0, y0, gray, scale);
+        if (x0 == x1 && y0 == y1) break;
+        const int32_t e2 = 2 * err;
+        if (e2 >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+        ++step;
     }
 }
 

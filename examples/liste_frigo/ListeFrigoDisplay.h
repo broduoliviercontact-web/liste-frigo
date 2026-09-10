@@ -82,6 +82,7 @@ private:
     void drawWeatherThunder(int32_t x, int32_t y, uint8_t gray, int32_t scale);
     void drawIconPoint(int32_t x, int32_t y, uint8_t gray, int32_t scale);
     void drawIconLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint8_t gray, int32_t scale);
+    void drawIconDashedLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint8_t gray, int32_t scale, int32_t dash_length, int32_t gap_length);
     void drawIconCircle(int32_t cx, int32_t cy, int32_t radius, uint8_t gray, int32_t scale);
     void drawIconFilledCircle(int32_t cx, int32_t cy, int32_t radius, uint8_t gray, int32_t scale);
     void drawListNavIcon(int32_t x, int32_t y, uint8_t gray);
@@ -95,6 +96,7 @@ private:
     void drawAgendaNavIcon(int32_t x, int32_t y, uint8_t gray);
     void drawRadarPlane(int32_t x, int32_t y, int16_t heading, uint8_t gray);
     void drawWorldMapMini(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t gray);
+    void drawIssTrack(const IssTrackPoint *track, int8_t track_count, int32_t map_x, int32_t map_y, int32_t map_w, int32_t map_h, uint8_t gray, int32_t scale, bool dashed);
     void drawMonochromeBitmap(int32_t x, int32_t y, int32_t width, int32_t height, const uint8_t *bits, uint8_t gray);
     void drawItemPictogram(int32_t x, int32_t y, int32_t size, const char *label);
     void drawListPickerRow(int32_t y, const ListSummary &list, bool selected);

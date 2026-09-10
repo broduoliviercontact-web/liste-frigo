@@ -379,9 +379,16 @@ bool sameEpaperSettings(const EpaperSettings &a, const EpaperSettings &b)
 bool sameIssState(const IssState &a, const IssState &b)
 {
     if (a.available != b.available || strcmp(a.over, b.over) != 0 || a.speed_kmh != b.speed_kmh || a.distance_km != b.distance_km ||
-        a.map_x != b.map_x || a.map_y != b.map_y || a.track_count != b.track_count) return false;
+        a.map_x != b.map_x || a.map_y != b.map_y || a.track_count != b.track_count ||
+        a.past_track_count != b.past_track_count || a.future_track_count != b.future_track_count) return false;
     for (int8_t i = 0; i < a.track_count; ++i) {
         if (a.track[i].x != b.track[i].x || a.track[i].y != b.track[i].y) return false;
+    }
+    for (int8_t i = 0; i < a.past_track_count; ++i) {
+        if (a.past_track[i].x != b.past_track[i].x || a.past_track[i].y != b.past_track[i].y) return false;
+    }
+    for (int8_t i = 0; i < a.future_track_count; ++i) {
+        if (a.future_track[i].x != b.future_track[i].x || a.future_track[i].y != b.future_track[i].y) return false;
     }
     return true;
 }

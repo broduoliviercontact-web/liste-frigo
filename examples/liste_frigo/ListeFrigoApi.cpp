@@ -138,6 +138,31 @@ int16_t mapYFromLatitude(float latitude)
     return constrain(value, 0, 255);
 }
 
+bool readIssTrackPoint(JsonObject point, IssTrackPoint &target)
+{
+    if (!point["x"].isNull() && !point["y"].isNull()) {
+        target.x = constrain(point["x"].as<int>(), 0, 255);
+        target.y = constrain(point["y"].as<int>(), 0, 255);
+        return true;
+    }
+    if (!point["longitude"].isNull() && !point["latitude"].isNull()) {
+        target.x = mapXFromLongitude(point["longitude"].as<float>());
+        target.y = mapYFromLatitude(point["latitude"].as<float>());
+        return true;
+    }
+    return false;
+}
+
+int8_t readIssTrack(JsonArray points, IssTrackPoint *target, int8_t max_count)
+{
+    int8_t count = 0;
+    for (JsonObject point : points) {
+        if (count >= max_count) break;
+        if (readIssTrackPoint(point, target[count])) ++count;
+    }
+    return count;
+}
+
 uint16_t distanceFromPantinKm(float latitude, float longitude)
 {
     constexpr float PANTIN_LATITUDE = 48.8966f;
@@ -523,20 +548,9 @@ void fetchTask(void *param)
                             fetched_iss.map_x = mapXFromLongitude(longitude);
                             fetched_iss.map_y = mapYFromLatitude(latitude);
                         }
-                        for (JsonObject point : iss["track"].as<JsonArray>()) {
-                            if (fetched_iss.track_count >= ISS_TRACK_POINT_COUNT) break;
-                            IssTrackPoint &target = fetched_iss.track[fetched_iss.track_count];
-                            if (!point["x"].isNull() && !point["y"].isNull()) {
-                                target.x = constrain(point["x"].as<int>(), 0, 255);
-                                target.y = constrain(point["y"].as<int>(), 0, 255);
-                            } else if (!point["longitude"].isNull() && !point["latitude"].isNull()) {
-                                target.x = mapXFromLongitude(point["longitude"].as<float>());
-                                target.y = mapYFromLatitude(point["latitude"].as<float>());
-                            } else {
-                                continue;
-                            }
-                            ++fetched_iss.track_count;
-                        }
+                        fetched_iss.track_count = readIssTrack(iss["track"].as<JsonArray>(), fetched_iss.track, ISS_TRACK_POINT_COUNT);
+                        fetched_iss.past_track_count = readIssTrack(iss["pastTrack"].as<JsonArray>(), fetched_iss.past_track, ISS_TRACK_POINT_COUNT);
+                        fetched_iss.future_track_count = readIssTrack(iss["futureTrack"].as<JsonArray>(), fetched_iss.future_track, ISS_TRACK_POINT_COUNT);
                         has_iss_state = true;
                     }
 
