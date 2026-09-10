@@ -55,7 +55,7 @@ export async function GET(request: Request) {
         repas: { status: "ready", ...meals },
         agenda: {
           status: "ready",
-          mode: "compact-week",
+          mode: agenda.layout,
           monday: agenda.monday,
           sunday: agenda.sunday,
           today: agenda.today,

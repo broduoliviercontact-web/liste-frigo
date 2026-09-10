@@ -3,10 +3,13 @@ import { getDb } from "../../../db";
 import { agendaEvents } from "../../../db/schema";
 import { requireSupervieAccess } from "../../access";
 
-type AgendaAction = "create" | "update" | "delete";
+type AgendaAction = "create" | "update" | "delete" | "setLayout";
 type AgendaCategory = "famille" | "creche" | "sante" | "maison" | "travail";
+type AgendaLayout = "horizontal" | "vertical";
 
 const agendaCategories = new Set<AgendaCategory>(["famille", "creche", "sante", "maison", "travail"]);
+const agendaLayouts = new Set<AgendaLayout>(["horizontal", "vertical"]);
+let agendaSchemaReady: Promise<void> | null = null;
 
 function parisDate(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -50,8 +53,49 @@ function cleanDuration(value?: number | null) {
   return Math.min(720, Math.max(15, Math.round(value / 15) * 15));
 }
 
+function cleanLayout(value?: string) {
+  return agendaLayouts.has(value as AgendaLayout) ? value as AgendaLayout : "horizontal";
+}
+
+async function ensureAgendaSchema() {
+  if (agendaSchemaReady) return agendaSchemaReady;
+  const setup = (async () => {
+    const { env } = await import("cloudflare:workers");
+    await env.DB.batch([
+      env.DB.prepare("CREATE TABLE IF NOT EXISTS agenda_events (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, time TEXT, title TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'famille', duration_minutes INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)"),
+      env.DB.prepare("CREATE INDEX IF NOT EXISTS agenda_events_date_idx ON agenda_events (date)"),
+      env.DB.prepare("CREATE INDEX IF NOT EXISTS agenda_events_date_time_idx ON agenda_events (date, time)"),
+      env.DB.prepare("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INTEGER NOT NULL)"),
+    ]);
+  })();
+  agendaSchemaReady = setup;
+  try {
+    await setup;
+  } catch (error) {
+    agendaSchemaReady = null;
+    throw error;
+  }
+}
+
+async function readAgendaLayout() {
+  await ensureAgendaSchema();
+  const { env } = await import("cloudflare:workers");
+  const row = await env.DB.prepare("SELECT value FROM app_settings WHERE key = ?").bind("agenda_layout").first<{ value?: string }>();
+  return cleanLayout(row?.value);
+}
+
+async function writeAgendaLayout(layout: AgendaLayout) {
+  await ensureAgendaSchema();
+  const { env } = await import("cloudflare:workers");
+  await env.DB.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
+    .bind("agenda_layout", layout, Date.now())
+    .run();
+}
+
 export async function readWeekAgenda() {
+  await ensureAgendaSchema();
   const { monday, sunday, today } = weekBounds();
+  const layout = await readAgendaLayout();
   const db = await getDb();
   const events = await db.select().from(agendaEvents)
     .where(and(gte(agendaEvents.date, monday), lte(agendaEvents.date, sunday)))
@@ -79,6 +123,7 @@ export async function readWeekAgenda() {
     .slice(0, 4);
 
   return {
+    layout,
     monday,
     sunday,
     today,
@@ -111,8 +156,14 @@ export async function POST(request: Request) {
       title?: string;
       category?: string;
       durationMinutes?: number | null;
+      layout?: string;
     };
     const db = await getDb();
+
+    if (body.action === "setLayout") {
+      await writeAgendaLayout(cleanLayout(body.layout));
+      return Response.json(await readWeekAgenda());
+    }
 
     if (body.action === "delete") {
       if (!body.id) return Response.json({ error: "Evenement introuvable" }, { status: 400 });

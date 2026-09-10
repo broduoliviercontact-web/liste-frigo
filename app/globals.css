@@ -205,6 +205,9 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .agenda-actions { display: flex; align-items: center; gap: 8px; }
 .agenda-actions button { min-height: 36px; border: 2px solid #111; background: transparent; padding: 6px 8px; font-size: 9px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
 .agenda-actions strong { display: grid; width: 52px; height: 52px; place-items: center; border: 3px solid #111; background: #111; color: #f8f7f1; font-size: 23px; line-height: 1; }
+.agenda-layout-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 0 0; }
+.agenda-layout-toggle button { min-height: 34px; border: 2px solid #111; background: #fff; color: #111; font-size: 9px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.agenda-layout-toggle button.active { background: #111; color: #fff; }
 .agenda-focus { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 0; border-bottom: 3px solid #111; }
 .agenda-focus article { min-width: 0; min-height: 108px; border: 2px solid #111; background: #fff; padding: 12px; display: grid; align-content: space-between; }
 .agenda-focus span { font-size: 10px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
@@ -250,6 +253,14 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .compact-week time { display: block; font-size: 10px; font-weight: 900; line-height: 1; }
 .compact-week p span { display: block; min-width: 0; overflow: hidden; font-size: 13px; font-weight: 900; line-height: 1.05; text-overflow: ellipsis; white-space: nowrap; }
 .compact-week p span b { display: inline-grid; width: 13px; height: 13px; margin-right: 5px; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-size: 8px; line-height: 1; }
+.compact-week.vertical { grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: 1fr; gap: 5px; }
+.compact-week.vertical article { grid-template-columns: 1fr; grid-template-rows: 58px minmax(0, 1fr); }
+.compact-week.vertical header { border-right: 0; border-bottom: 2px solid currentColor; }
+.compact-week.vertical header strong { font-size: 19px; }
+.compact-week.vertical p { grid-template-columns: 1fr; align-content: start; align-items: start; gap: 4px; padding: 6px 4px; }
+.compact-week.vertical time { font-size: 8px; }
+.compact-week.vertical p span { font-size: 9px; line-height: 1.05; }
+.compact-week.vertical p span b { width: 11px; height: 11px; margin-right: 3px; font-size: 7px; }
 .agenda-note { margin: 10px 0 0; text-align: center; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .agenda-note span { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border: 2px solid #111; background: #fff; }
 .agenda-note.error span { background: transparent; }
@@ -576,6 +587,8 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
   .agenda-actions { gap: 5px; }
   .agenda-actions button { min-height: 32px; padding: 4px 6px; font-size: 7px; }
   .agenda-actions strong { width: 44px; height: 44px; font-size: 19px; }
+  .agenda-layout-toggle { gap: 5px; padding-top: 8px; }
+  .agenda-layout-toggle button { min-height: 28px; font-size: 7px; }
   .agenda-focus { gap: 7px; padding: 10px 0; }
   .agenda-focus article { min-height: 90px; padding: 8px; }
   .agenda-focus strong { font-size: 23px; }
@@ -593,6 +606,11 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
   .compact-week time { font-size: 8px; }
   .compact-week p span { font-size: 11px; line-height: 1.05; }
   .compact-week p span b { width: 11px; height: 11px; margin-right: 4px; font-size: 7px; }
+  .compact-week.vertical { gap: 3px; }
+  .compact-week.vertical article { grid-template-rows: 48px minmax(0, 1fr); }
+  .compact-week.vertical p { padding: 5px 3px; }
+  .compact-week.vertical time { font-size: 7px; }
+  .compact-week.vertical p span { font-size: 8px; }
   .agenda-note { margin-top: 7px; font-size: 7px; }
   .full-list-header { padding: 24px 18px 18px; }
   .full-list-header h2 { font-size: clamp(35px, 10vw, 45px); }

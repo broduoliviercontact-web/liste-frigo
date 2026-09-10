@@ -16,6 +16,7 @@ type AgendaEvent = {
 };
 type AgendaDay = { date: string; dayIndex: number; events: AgendaEvent[] };
 type AgendaState = {
+  layout: "horizontal" | "vertical";
   monday: string;
   sunday: string;
   today: string;
@@ -650,11 +651,30 @@ function AgendaPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab
     } catch { setState("error"); }
   }
 
+  async function setAgendaLayout(layout: AgendaState["layout"]) {
+    if (agenda?.layout === layout) return;
+    setState("saving");
+    try {
+      const response = await fetch("/api/agenda", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "setLayout", layout }),
+      });
+      if (!response.ok) throw new Error("layout");
+      const data = await response.json() as AgendaState;
+      setAgenda(data);
+      setState("ready");
+    } catch { setState("error"); }
+  }
+
   return <div className="agenda-page">
     <header className="agenda-header">
       <div><p className="eyebrow">SUPERVIE · AGENDA</p><h1>Semaine compacte</h1></div>
       <div className="agenda-actions"><button onClick={() => setEditingAgenda(true)}>Modifier</button><strong>{agenda?.eventCount ?? 0}</strong></div>
     </header>
+    <div className="agenda-layout-toggle" role="group" aria-label="Mode de visualisation agenda">
+      <button className={(agenda?.layout ?? "horizontal") === "horizontal" ? "active" : ""} onClick={() => void setAgendaLayout("horizontal")}>Horizontal</button>
+      <button className={agenda?.layout === "vertical" ? "active" : ""} onClick={() => void setAgendaLayout("vertical")}>Vertical</button>
+    </div>
     <section className="agenda-focus" aria-label="Prochains moments">
       {(upcoming.length ? upcoming.slice(0, 2) : [null, null]).map((event, index) => <article key={event?.id ?? `empty-${index}`}>
         <span>{index === 0 ? "Prochain" : "Ensuite"}</span>
@@ -662,7 +682,7 @@ function AgendaPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab
         <p>{event?.title ?? "À planifier"}</p>
       </article>)}
     </section>
-    <section className="compact-week" aria-label="Aperçu e-paper de la semaine">
+    <section className={`compact-week ${agenda?.layout === "vertical" ? "vertical" : "horizontal"}`} aria-label="Aperçu e-paper de la semaine">
       {days.map((day) => <article key={day.date} className={day.date === agenda?.today ? "today" : ""}>
         <header><span>{mealDayLabel(day.date, true)}</span><strong>{day.date.slice(-2)}</strong></header>
         <div>
