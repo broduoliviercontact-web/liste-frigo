@@ -765,9 +765,9 @@ void ListeFrigoDisplay::drawAgendaPage()
             if (item) {
                 drawText(x + 6, grid_y + 82, item->time[0] ? item->time : "--:--", 1, BLACK);
                 const char mark[] = {agendaCategoryMark(item->category), 0};
-                drawIconCircle(x + 14, grid_y + 120, 8, BLACK, 1);
-                drawText(x + 10, grid_y + 115, mark, 1, BLACK);
-                drawTextLimited(x + 8, grid_y + 142, item->label, 1, BLACK, w - 14);
+                drawIconCircle(x + 14, grid_y + 112, 8, BLACK, 1);
+                drawText(x + 10, grid_y + 107, mark, 1, BLACK);
+                drawTextLimited(x + 8, grid_y + 132, item->label, 1, BLACK, w - 14);
                 const uint8_t hidden_count = day->overflow + max<int8_t>(0, day->item_count - 1);
                 if (hidden_count > 0) {
                     char more[8] = {0};
@@ -775,9 +775,8 @@ void ListeFrigoDisplay::drawAgendaPage()
                     drawText(x + 8, grid_y + grid_h - 28, more, 1, DARK);
                 }
             } else {
-                drawIconCircle(x + 14, grid_y + 88, 8, BLACK, 1);
-                drawText(x + 10, grid_y + 83, "F", 1, BLACK);
-                drawTextLimited(x + 8, grid_y + 114, "Libre", 1, BLACK, w - 14);
+                const int32_t dash_w = min<int32_t>(18, w - 20);
+                fillRect(x + (w - dash_w) / 2, grid_y + 132, dash_w, 2, DARK);
             }
         }
     } else {
@@ -807,9 +806,9 @@ void ListeFrigoDisplay::drawAgendaPage()
             if (item) {
                 drawText(content_x, y + 19, item->time[0] ? item->time : "--:--", 2, BLACK);
                 const char mark[] = {agendaCategoryMark(item->category), 0};
-                drawIconCircle(content_x + 74, y + 27, 8, BLACK, 1);
-                drawText(content_x + 70, y + 22, mark, 1, BLACK);
-                drawTextLimited(content_x + 96, y + 19, item->label, 2, BLACK, 220);
+                drawIconCircle(content_x + 68, y + 27, 8, BLACK, 1);
+                drawText(content_x + 64, y + 22, mark, 1, BLACK);
+                drawTextLimited(content_x + 88, y + 19, item->label, 2, BLACK, 238);
                 const uint8_t hidden_count = day->overflow + max<int8_t>(0, day->item_count - 1);
                 if (hidden_count > 0) {
                     char more[8] = {0};
@@ -817,9 +816,8 @@ void ListeFrigoDisplay::drawAgendaPage()
                     drawText(row_x + row_w - 30, y + 20, more, 2, DARK);
                 }
             } else {
-                drawIconCircle(content_x + 8, y + 27, 8, BLACK, 1);
-                drawText(content_x + 4, y + 22, "F", 1, BLACK);
-                drawTextLimited(content_x + 30, y + 19, "Libre", 2, BLACK, 280);
+                drawText(content_x, y + 20, "LIBRE", 1, DARK);
+                fillRect(content_x + 52, y + 27, 86, 2, DARK);
             }
         }
     }
