@@ -686,9 +686,13 @@ function AgendaPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab
       {days.map((day) => <article key={day.date} className={day.date === agenda?.today ? "today" : ""}>
         <header><span>{mealDayLabel(day.date, true)}</span><strong>{day.date.slice(-2)}</strong></header>
         <div>
-          {(day.events.length ? day.events.slice(0, 2) : [{ id: -day.dayIndex, time: "", title: "Libre", category: "famille" }]).map((event) => <p key={event.id}>
-            {event.time && <time>{event.time}</time>}<span><b>{agendaCategoryMark(event.category)}</b>{event.title}</span>
-          </p>)}
+          {(day.events.length ? day.events.slice(0, 2) : [{ id: -day.dayIndex, time: "", title: "Libre", category: "famille" }]).map((event) => {
+            const emptyEvent = event.id < 0;
+            return <p key={event.id} className={emptyEvent ? "empty" : ""}>
+              {!emptyEvent && <time>{event.time || "--:--"}</time>}
+              <span>{emptyEvent ? "Libre" : <><b>{agendaCategoryMark(event.category)}</b>{event.title}</>}</span>
+            </p>;
+          })}
         </div>
       </article>)}
     </section>
