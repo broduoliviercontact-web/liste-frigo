@@ -32,6 +32,7 @@ public:
     bool takeEpaperSettings(EpaperSettings &target);
     bool takeIssState(IssState &target);
     bool takeAirState(AirState &target);
+    bool takeAgendaState(AgendaState &target);
     bool getCachedListState(int32_t list_id, ListPageState &target) const;
     bool sendToggleItem(int32_t item_id, bool checked);
     bool sendSelectList(int32_t list_id);
@@ -44,7 +45,8 @@ public:
                      int8_t list_cache_count, const char *generated_at,
                      const WeatherState *weather_state, const MealWeekState *meal_week_state,
                      const MetroState *metro_state, const EpaperSettings *settings,
-                     const IssState *iss_state, const AirState *air_state);
+                     const IssState *iss_state, const AirState *air_state,
+                     const AgendaState *agenda_state);
     void finishToggle(bool success, int http_code, size_t bytes, const char *message,
                       RequestKind kind, int32_t item_id, bool checked, uint32_t generation);
     void mergePendingToggles(ListPageState &remote_state);
@@ -101,6 +103,7 @@ private:
     EpaperSettings result_epaper_settings = {};
     IssState result_iss_state = {};
     AirState result_air_state = {};
+    AgendaState result_agenda_state = {};
     ListPageState cached_list_states[LIST_COUNT_MAX] = {};
     int8_t cached_list_count = 0;
     bool result_has_list_state = false;
@@ -112,6 +115,7 @@ private:
     volatile bool epaper_settings_available = false;
     volatile bool iss_state_available = false;
     volatile bool air_state_available = false;
+    volatile bool agenda_state_available = false;
 
     void startFetch();
     void startToggle();

@@ -20,9 +20,22 @@ constexpr NavTabId DEFAULT_VISIBLE_TABS[NAV_VISIBLE_TAB_MAX] = {
     TAB_METEO,
     TAB_REPAS,
     TAB_METRO,
+    TAB_AGENDA,
     TAB_ISS,
     TAB_AIR,
 };
+
+const char *AGENDA_DAY_LABELS[AGENDA_DAY_COUNT] = {"LUN", "MAR", "MER", "JEU", "VEN", "SAM", "DIM"};
+
+char agendaCategoryMark(const char *category)
+{
+    if (!category || !*category) return 'F';
+    if (strcmp(category, "travail") == 0) return 'T';
+    if (strcmp(category, "sante") == 0) return 'S';
+    if (strcmp(category, "maison") == 0) return 'M';
+    if (strcmp(category, "creche") == 0) return 'C';
+    return 'F';
+}
 
 const uint8_t GLYPH_SPACE[7] = {
     0b00000,
@@ -232,6 +245,11 @@ void ListeFrigoDisplay::setAirState(const AirState &state)
     if (selected_aircraft >= air_state.aircraft_count) selected_aircraft = -1;
 }
 
+void ListeFrigoDisplay::setAgendaState(const AgendaState &state)
+{
+    agenda_state = state;
+}
+
 void ListeFrigoDisplay::setSelectedAircraft(int8_t index)
 {
     selected_aircraft = index >= 0 && index < air_state.aircraft_count ? index : -1;
@@ -363,6 +381,10 @@ void ListeFrigoDisplay::drawPage(NavTabId tab, const ListPageState *list_state)
     }
     if (tab == TAB_METRO) {
         drawMetroPage();
+        return;
+    }
+    if (tab == TAB_AGENDA) {
+        drawAgendaPage();
         return;
     }
     if (tab == TAB_REGLAGES) {
@@ -693,6 +715,73 @@ void ListeFrigoDisplay::drawMetroPage()
         drawCenteredText(360, "Donnees metro en attente", 3, DARK);
     }
     drawPrimaryNavBar(TAB_METRO);
+}
+
+void ListeFrigoDisplay::drawAgendaPage()
+{
+    drawText(52, 34, "SUPERVIE", 3, DARK);
+    drawText(52, 76, "AGENDA", 7, BLACK);
+    char count_label[8] = {0};
+    snprintf(count_label, sizeof(count_label), "%u", agenda_state.available ? agenda_state.event_count : 0);
+    fillRect(432, 58, 58, 58, BLACK);
+    drawText(432 + (58 - textWidth(count_label, 4)) / 2, 74, count_label, 4, WHITE);
+    fillRect(32, 144, LOGICAL_WIDTH - 64, 4, BLACK);
+
+    drawText(56, 176, "PROCHAIN", 2, DARK);
+    drawRect(52, 204, 436, 92, 2, BLACK);
+    if (agenda_state.available && agenda_state.upcoming_count > 0) {
+        const AgendaItem &next = agenda_state.upcoming[0];
+        drawText(72, 222, next.time[0] ? next.time : "--:--", 4, BLACK);
+        drawTextLimited(206, 230, next.label, 3, BLACK, 260);
+    } else {
+        drawText(72, 230, "--:--", 4, BLACK);
+        drawTextLimited(206, 238, "A planifier", 3, BLACK, 260);
+    }
+
+    fillRect(32, 326, LOGICAL_WIDTH - 64, 4, BLACK);
+    constexpr int32_t row_x = 52;
+    constexpr int32_t row_w = 436;
+    constexpr int32_t day_w = 84;
+    constexpr int32_t row_h = 56;
+    constexpr int32_t row_gap = 8;
+    constexpr int32_t row_top = 350;
+    for (int8_t index = 0; index < AGENDA_DAY_COUNT; ++index) {
+        const int32_t y = row_top + index * (row_h + row_gap);
+        const AgendaDay *day = index < agenda_state.day_count ? &agenda_state.days[index] : nullptr;
+        const bool today = day && day->today;
+        drawRect(row_x, y, row_w, row_h, 2, BLACK);
+        if (today) fillRect(row_x, y, day_w, row_h, BLACK);
+        const uint8_t day_ink = today ? WHITE : BLACK;
+        const uint8_t day_index = day ? day->day_index % AGENDA_DAY_COUNT : index;
+        drawText(row_x + 12, y + 8, AGENDA_DAY_LABELS[day_index], 1, day_ink);
+        char day_number[4] = {0};
+        if (day && day->day_of_month > 0) snprintf(day_number, sizeof(day_number), "%02u", day->day_of_month);
+        else strlcpy(day_number, "--", sizeof(day_number));
+        drawText(row_x + 25, y + 26, day_number, 3, day_ink);
+        fillRect(row_x + day_w, y, 2, row_h, BLACK);
+
+        const AgendaItem *item = day && day->item_count > 0 ? &day->items[0] : nullptr;
+        const int32_t content_x = row_x + day_w + 14;
+        if (item) {
+            drawText(content_x, y + 19, item->time[0] ? item->time : "--:--", 2, BLACK);
+            const char mark[] = {agendaCategoryMark(item->category), 0};
+            drawIconCircle(content_x + 74, y + 27, 8, BLACK, 1);
+            drawText(content_x + 70, y + 22, mark, 1, BLACK);
+            drawTextLimited(content_x + 96, y + 19, item->label, 2, BLACK, 220);
+            const uint8_t hidden_count = day->overflow + max<int8_t>(0, day->item_count - 1);
+            if (hidden_count > 0) {
+                char more[8] = {0};
+                snprintf(more, sizeof(more), "+%u", hidden_count);
+                drawText(row_x + row_w - 30, y + 20, more, 2, DARK);
+            }
+        } else {
+            drawIconCircle(content_x + 8, y + 27, 8, BLACK, 1);
+            drawText(content_x + 4, y + 22, "F", 1, BLACK);
+            drawTextLimited(content_x + 30, y + 19, "Libre", 2, BLACK, 280);
+        }
+    }
+    drawText(92, 818, agenda_state.available ? "Agenda synchronise - edition sur site" : "Agenda en attente", 2, DARK);
+    drawPrimaryNavBar(TAB_AGENDA);
 }
 
 void ListeFrigoDisplay::drawSettingsPage()
@@ -1333,8 +1422,10 @@ void ListeFrigoDisplay::drawPrimaryNavBar(NavTabId selected_tab)
             drawSettingsNavIcon(center - 15, icon_top, ink);
         } else if (tabs[index] == TAB_ISS) {
             drawIssNavIcon(center - 15, icon_top, ink);
-        } else {
+        } else if (tabs[index] == TAB_AIR) {
             drawAirNavIcon(center - 15, icon_top, ink);
+        } else {
+            drawAgendaNavIcon(center - 15, icon_top, ink);
         }
         drawText(x + (width - textWidth(navAsciiName(tabs[index]), 1)) / 2, label_top, navAsciiName(tabs[index]), 1, ink);
         x += width + NAV_GAP;
@@ -1368,6 +1459,11 @@ void ListeFrigoDisplay::drawNavItem(NavTabId tab, bool selected)
         drawRect(center_x - 25, nav_top + 34, 50, 16, 4, ink);
         drawRect(center_x - 22, nav_top + 18, 16, 16, 3, ink);
         drawRect(center_x + 6, nav_top + 18, 16, 16, 3, ink);
+    } else if (tab == TAB_AGENDA) {
+        drawRect(center_x - 18, nav_top + 14, 36, 32, 3, ink);
+        fillRect(center_x - 18, nav_top + 22, 36, 3, ink);
+        fillRect(center_x - 8, nav_top + 10, 3, 8, ink);
+        fillRect(center_x + 8, nav_top + 10, 3, 8, ink);
     } else {
         drawRect(center_x - 25, nav_top + 22, 50, 28, 4, ink);
         fillRect(center_x - 16, nav_top + 15, 32, 7, ink);
@@ -1400,6 +1496,16 @@ void ListeFrigoDisplay::drawAirNavIcon(int32_t x, int32_t y, uint8_t gray)
     drawIconCircle(x + 15, y + 15, 13, gray, 1);
     drawIconCircle(x + 15, y + 15, 7, gray, 1);
     drawRadarPlane(x + 15, y + 15, 45, gray);
+}
+
+void ListeFrigoDisplay::drawAgendaNavIcon(int32_t x, int32_t y, uint8_t gray)
+{
+    drawRect(x + 3, y + 5, 24, 22, 2, gray);
+    fillRect(x + 3, y + 11, 24, 2, gray);
+    fillRect(x + 8, y + 2, 3, 7, gray);
+    fillRect(x + 19, y + 2, 3, 7, gray);
+    fillRect(x + 8, y + 17, 4, 4, gray);
+    fillRect(x + 15, y + 17, 4, 4, gray);
 }
 
 void ListeFrigoDisplay::drawRadarPlane(int32_t x, int32_t y, int16_t heading, uint8_t gray)

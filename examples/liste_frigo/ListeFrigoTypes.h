@@ -6,8 +6,8 @@
 constexpr int32_t LOGICAL_WIDTH = EPD_HEIGHT;   // 540
 constexpr int32_t LOGICAL_HEIGHT = EPD_WIDTH;   // 960
 constexpr size_t FRAMEBUFFER_BYTES = EPD_WIDTH * EPD_HEIGHT / 2;
-constexpr int8_t NAV_TAB_COUNT = 8;
-constexpr int8_t NAV_VISIBLE_TAB_MAX = 7;
+constexpr int8_t NAV_TAB_COUNT = 9;
+constexpr int8_t NAV_VISIBLE_TAB_MAX = 8;
 constexpr int32_t NAV_LEFT = 32;
 constexpr int32_t NAV_TOP = 850;
 constexpr int32_t NAV_WIDTH = LOGICAL_WIDTH - (NAV_LEFT * 2);
@@ -37,6 +37,11 @@ constexpr int8_t AIRCRAFT_LABEL_MAX = 10;
 constexpr int8_t AIRCRAFT_AIRLINE_MAX = 20;
 constexpr int8_t AIRCRAFT_TYPE_MAX = 18;
 constexpr int8_t AIRCRAFT_ROUTE_MAX = 34;
+constexpr int8_t AGENDA_DAY_COUNT = 7;
+constexpr int8_t AGENDA_DAY_ITEM_MAX = 2;
+constexpr int8_t AGENDA_LABEL_MAX = 40;
+constexpr int8_t AGENDA_TIME_MAX = 6;
+constexpr int8_t AGENDA_CATEGORY_MAX = 12;
 
 enum NavTabId : int8_t {
     TAB_LISTES = 0,
@@ -47,6 +52,7 @@ enum NavTabId : int8_t {
     TAB_REGLAGES = 5,
     TAB_ISS = 6,
     TAB_AIR = 7,
+    TAB_AGENDA = 8,
     TAB_NONE = -1,
 };
 
@@ -191,6 +197,30 @@ struct AirState {
     int8_t aircraft_count;
 };
 
+struct AgendaItem {
+    char time[AGENDA_TIME_MAX];
+    char label[AGENDA_LABEL_MAX];
+    char category[AGENDA_CATEGORY_MAX];
+};
+
+struct AgendaDay {
+    uint8_t day_index;
+    uint8_t day_of_month;
+    bool today;
+    AgendaItem items[AGENDA_DAY_ITEM_MAX];
+    int8_t item_count;
+    uint8_t overflow;
+};
+
+struct AgendaState {
+    bool available;
+    uint8_t event_count;
+    AgendaItem upcoming[AGENDA_DAY_ITEM_MAX];
+    int8_t upcoming_count;
+    AgendaDay days[AGENDA_DAY_COUNT];
+    int8_t day_count;
+};
+
 struct TouchEvent {
     int16_t physical_x;
     int16_t physical_y;
@@ -236,6 +266,8 @@ inline const char *navAsciiName(NavTabId tab)
         return "ISS";
     case TAB_AIR:
         return "Air";
+    case TAB_AGENDA:
+        return "Agenda";
     default:
         return "aucun";
     }
@@ -260,6 +292,8 @@ inline const char *navSerialName(NavTabId tab)
         return "ISS";
     case TAB_AIR:
         return "Air";
+    case TAB_AGENDA:
+        return "Agenda";
     default:
         return "aucun";
     }
@@ -284,6 +318,8 @@ inline const char *navPageTitle(NavTabId tab)
         return "ISS";
     case TAB_AIR:
         return "AIR";
+    case TAB_AGENDA:
+        return "AGENDA";
     default:
         return "LISTES";
     }
@@ -308,6 +344,8 @@ inline const char *navApiKey(NavTabId tab)
         return "iss";
     case TAB_AIR:
         return "air";
+    case TAB_AGENDA:
+        return "agenda";
     default:
         return "listes";
     }
@@ -324,5 +362,6 @@ inline NavTabId navTabFromApiKey(const char *key)
     if (strcmp(key, "reglages") == 0 || strcmp(key, "settings") == 0) return TAB_REGLAGES;
     if (strcmp(key, "iss") == 0) return TAB_ISS;
     if (strcmp(key, "air") == 0 || strcmp(key, "traffic-aerien") == 0) return TAB_AIR;
+    if (strcmp(key, "agenda") == 0 || strcmp(key, "calendrier") == 0) return TAB_AGENDA;
     return TAB_NONE;
 }

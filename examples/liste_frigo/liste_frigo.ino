@@ -32,7 +32,7 @@ bool rtc_online = false;
 int8_t weather_display_hour = -1;
 int8_t meal_display_slot = -1;
 uint32_t next_weather_clock_poll_ms = 0;
-NavTabId active_tab = TAB_LISTES;
+NavTabId active_tab = TAB_AGENDA;
 uint32_t last_preview_ms = 0;
 bool keyboard_open = false;
 bool keyboard_extra_page = false;
@@ -50,14 +50,14 @@ char keyboard_display_value[LIST_LABEL_MAX] = {0};
 ListPageState list_display_state = {};
 uint8_t list_display_rows_mask = 0;
 ListPageState page_display_state = {};
-NavTabId page_display_tab = TAB_LISTES;
+NavTabId page_display_tab = TAB_AGENDA;
 bool page_display_keyboard = false;
 bool page_display_keyboard_extra = false;
 char page_display_keyboard_value[LIST_LABEL_MAX] = {0};
 bool page_display_pending = false;
 bool page_display_list_picker = false;
 ListPageState render_page_state = {};
-NavTabId render_page_tab = TAB_LISTES;
+NavTabId render_page_tab = TAB_AGENDA;
 bool render_page_keyboard = false;
 bool render_page_keyboard_extra = false;
 char render_page_keyboard_value[LIST_LABEL_MAX] = {0};
@@ -122,10 +122,11 @@ ListPageState list_state = {
 WeatherState weather_state = {};
 MealWeekState meal_week_state = {};
 MetroState metro_state = {};
-EpaperSettings epaper_settings = {{TAB_LISTES, TAB_CRECHE, TAB_METEO, TAB_REPAS, TAB_METRO, TAB_ISS, TAB_AIR}, NAV_VISIBLE_TAB_MAX, TAB_LISTES, false, 120};
+EpaperSettings epaper_settings = {{TAB_LISTES, TAB_CRECHE, TAB_METEO, TAB_REPAS, TAB_METRO, TAB_AGENDA, TAB_ISS, TAB_AIR}, NAV_VISIBLE_TAB_MAX, TAB_AGENDA, false, 120};
 bool epaper_settings_received = false;
 IssState iss_state = {};
 AirState air_state = {};
+AgendaState agenda_state = {};
 int8_t selected_aircraft_index = -1;
 uint32_t last_carousel_ms = 0;
 
@@ -403,6 +404,30 @@ bool sameAirState(const AirState &a, const AirState &b)
     return true;
 }
 
+bool sameAgendaState(const AgendaState &a, const AgendaState &b)
+{
+    if (a.available != b.available || a.event_count != b.event_count ||
+        a.upcoming_count != b.upcoming_count || a.day_count != b.day_count) return false;
+    for (int8_t i = 0; i < a.upcoming_count; ++i) {
+        if (strcmp(a.upcoming[i].time, b.upcoming[i].time) != 0 ||
+            strcmp(a.upcoming[i].label, b.upcoming[i].label) != 0 ||
+            strcmp(a.upcoming[i].category, b.upcoming[i].category) != 0) return false;
+    }
+    for (int8_t day = 0; day < a.day_count; ++day) {
+        const AgendaDay &left = a.days[day];
+        const AgendaDay &right = b.days[day];
+        if (left.day_index != right.day_index || left.day_of_month != right.day_of_month ||
+            left.today != right.today || left.item_count != right.item_count ||
+            left.overflow != right.overflow) return false;
+        for (int8_t item = 0; item < left.item_count; ++item) {
+            if (strcmp(left.items[item].time, right.items[item].time) != 0 ||
+                strcmp(left.items[item].label, right.items[item].label) != 0 ||
+                strcmp(left.items[item].category, right.items[item].category) != 0) return false;
+        }
+    }
+    return true;
+}
+
 bool isVisibleTab(NavTabId tab)
 {
     for (int8_t i = 0; i < epaper_settings.visible_tab_count && i < NAV_VISIBLE_TAB_MAX; ++i) {
@@ -533,6 +558,17 @@ void applyApiListState()
         Serial.printf("AIR: recu avions=%d\n", air_state.aircraft_count);
         if (air_changed && active_tab == TAB_AIR) {
             requestPageDisplay(TAB_AIR, list_state, "air actualise");
+        }
+    }
+
+    AgendaState remote_agenda = {};
+    if (api.takeAgendaState(remote_agenda)) {
+        const bool agenda_changed = !sameAgendaState(agenda_state, remote_agenda);
+        agenda_state = remote_agenda;
+        display.setAgendaState(agenda_state);
+        Serial.printf("AGENDA: recu jours=%d evenements=%u\n", agenda_state.day_count, agenda_state.event_count);
+        if (agenda_changed && active_tab == TAB_AGENDA) {
+            requestPageDisplay(TAB_AGENDA, list_state, "agenda actualise");
         }
     }
 

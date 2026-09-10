@@ -16,6 +16,7 @@ public:
     void setEpaperSettings(const EpaperSettings &settings);
     void setIssState(const IssState &state);
     void setAirState(const AirState &state);
+    void setAgendaState(const AgendaState &state);
     void setSelectedAircraft(int8_t index);
     void updateKeyboardValue(const char *value);
     void updateListItemToggle(int8_t visible_row, const ListPageState &list_state);
@@ -40,6 +41,7 @@ private:
     EpaperSettings epaper_settings = {};
     IssState iss_state = {};
     AirState air_state = {};
+    AgendaState agenda_state = {};
     int8_t selected_aircraft = -1;
 
     void drawPage(NavTabId tab, const ListPageState *list_state);
@@ -52,6 +54,7 @@ private:
     void drawSettingsPage();
     void drawIssPage();
     void drawAirPage();
+    void drawAgendaPage();
     void drawAirRadar();
     void drawAirDetails(const Aircraft &plane);
     void drawListPickerPage(const ListPageState &list_state);
@@ -89,6 +92,7 @@ private:
     void drawSettingsNavIcon(int32_t x, int32_t y, uint8_t gray);
     void drawIssNavIcon(int32_t x, int32_t y, uint8_t gray);
     void drawAirNavIcon(int32_t x, int32_t y, uint8_t gray);
+    void drawAgendaNavIcon(int32_t x, int32_t y, uint8_t gray);
     void drawRadarPlane(int32_t x, int32_t y, int16_t heading, uint8_t gray);
     void drawWorldMapMini(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t gray);
     void drawMonochromeBitmap(int32_t x, int32_t y, int32_t width, int32_t height, const uint8_t *bits, uint8_t gray);

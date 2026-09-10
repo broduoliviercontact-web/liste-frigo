@@ -100,6 +100,23 @@ void copyListName(char *target, const char *source)
     copyEpaperText(target, LIST_NAME_MAX, source, "Courses");
 }
 
+void copyAgendaLabel(char *target, const char *source)
+{
+    copyEpaperText(target, AGENDA_LABEL_MAX, source, "Libre");
+}
+
+void copyAgendaCategory(char *target, const char *source)
+{
+    copyEpaperText(target, AGENDA_CATEGORY_MAX, source, "famille");
+}
+
+uint8_t dayOfMonthFromIsoDate(const char *date)
+{
+    if (!date || strlen(date) < 10) return 0;
+    const int day = atoi(date + 8);
+    return day >= 1 && day <= 31 ? static_cast<uint8_t>(day) : 0;
+}
+
 int8_t hourFromIso(const char *timestamp)
 {
     if (!timestamp || strlen(timestamp) < 13 || timestamp[10] != 'T') {
@@ -222,6 +239,8 @@ void fetchTask(void *param)
         bool has_iss_state = false;
         AirState fetched_air = {};
         bool has_air_state = false;
+        AgendaState fetched_agenda = {};
+        bool has_agenda_state = false;
         const bool is_write_request = kind == ListeFrigoApi::REQUEST_TOGGLE_ITEM ||
                                       kind == ListeFrigoApi::REQUEST_SELECT_LIST ||
                                       kind == ListeFrigoApi::REQUEST_ADD_ITEM;
@@ -426,6 +445,37 @@ void fetchTask(void *param)
                         has_metro_state = fetched_metro.line_count > 0;
                     }
 
+                    JsonObject agenda = doc["pages"]["agenda"].as<JsonObject>();
+                    if (strcmp(agenda["status"] | "", "ready") == 0) {
+                        fetched_agenda.available = true;
+                        fetched_agenda.event_count = constrain(agenda["eventCount"] | 0, 0, 255);
+                        for (JsonObject item : agenda["upcoming"].as<JsonArray>()) {
+                            if (fetched_agenda.upcoming_count >= AGENDA_DAY_ITEM_MAX) break;
+                            AgendaItem &target = fetched_agenda.upcoming[fetched_agenda.upcoming_count++];
+                            strlcpy(target.time, item["time"] | "", sizeof(target.time));
+                            copyAgendaLabel(target.label, item["title"] | item["label"] | "A planifier");
+                            copyAgendaCategory(target.category, item["category"] | "famille");
+                        }
+                        const char *today = agenda["today"] | "";
+                        for (JsonObject day : agenda["days"].as<JsonArray>()) {
+                            if (fetched_agenda.day_count >= AGENDA_DAY_COUNT) break;
+                            AgendaDay &target_day = fetched_agenda.days[fetched_agenda.day_count++];
+                            target_day.day_index = constrain(day["dayIndex"] | fetched_agenda.day_count - 1, 0, 6);
+                            const char *date = day["date"] | "";
+                            target_day.day_of_month = dayOfMonthFromIsoDate(date);
+                            target_day.today = today && *today && strcmp(date, today) == 0;
+                            target_day.overflow = constrain(day["overflow"] | 0, 0, 255);
+                            for (JsonObject item : day["items"].as<JsonArray>()) {
+                                if (target_day.item_count >= AGENDA_DAY_ITEM_MAX) break;
+                                AgendaItem &target = target_day.items[target_day.item_count++];
+                                strlcpy(target.time, item["time"] | "", sizeof(target.time));
+                                copyAgendaLabel(target.label, item["label"] | item["title"] | "Libre");
+                                copyAgendaCategory(target.category, item["category"] | "famille");
+                            }
+                        }
+                        has_agenda_state = fetched_agenda.day_count > 0;
+                    }
+
                     JsonObject settings = doc["epaperSettings"].as<JsonObject>();
                     if (settings.isNull()) {
                         settings = doc["pages"]["reglages"].as<JsonObject>();
@@ -540,7 +590,8 @@ void fetchTask(void *param)
                                 has_metro_state ? &fetched_metro : nullptr,
                                 has_settings ? &fetched_settings : nullptr,
                                 has_iss_state ? &fetched_iss : nullptr,
-                                has_air_state ? &fetched_air : nullptr);
+                                has_air_state ? &fetched_air : nullptr,
+                                has_agenda_state ? &fetched_agenda : nullptr);
         }
     }
 }
@@ -685,6 +736,14 @@ bool ListeFrigoApi::takeAirState(AirState &target)
     return true;
 }
 
+bool ListeFrigoApi::takeAgendaState(AgendaState &target)
+{
+    if (!agenda_state_available) return false;
+    target = result_agenda_state;
+    agenda_state_available = false;
+    return true;
+}
+
 bool ListeFrigoApi::getCachedListState(int32_t list_id, ListPageState &target) const
 {
     for (int8_t i = 0; i < cached_list_count; ++i) {
@@ -788,7 +847,8 @@ void ListeFrigoApi::finishFetch(bool success, int http_code, size_t bytes, const
                                 int8_t list_cache_count, const char *generated_at,
                                 const WeatherState *weather_state, const MealWeekState *meal_week_state,
                                 const MetroState *metro_state, const EpaperSettings *settings,
-                                const IssState *iss_state, const AirState *air_state)
+                                const IssState *iss_state, const AirState *air_state,
+                                const AgendaState *agenda_state)
 {
     result_http_code = http_code;
     result_bytes = bytes;
@@ -811,6 +871,8 @@ void ListeFrigoApi::finishFetch(bool success, int http_code, size_t bytes, const
     if (iss_state_available) result_iss_state = *iss_state;
     air_state_available = success && air_state != nullptr;
     if (air_state_available) result_air_state = *air_state;
+    agenda_state_available = success && agenda_state != nullptr;
+    if (agenda_state_available) result_agenda_state = *agenda_state;
     result_has_list_state = success && list_state != nullptr;
     if (result_has_list_state) {
         result_list_state = *list_state;
