@@ -808,10 +808,49 @@ function projectIssTrack(track: IssState["track"]) {
   }, []);
 }
 
+function projectIssTailToCurrent(track: IssState["track"]) {
+  if (!track || track.length < 2) return null;
+  const previous = projectTrackPoint(track[track.length - 2].longitude, track[track.length - 2].latitude);
+  const current = projectTrackPoint(track[track.length - 1].longitude, track[track.length - 1].latitude);
+  let previousX = previous.x;
+  if (Math.abs(current.x - previous.x) > WORLD_TRACK_WIDTH / 2) {
+    previousX += previous.x > current.x ? -WORLD_TRACK_WIDTH : WORLD_TRACK_WIDTH;
+  }
+  const dx = previousX - current.x;
+  const dy = previous.y - current.y;
+  const length = Math.hypot(dx, dy);
+  if (length <= 1) return null;
+  const visibleLength = Math.min(58, length);
+  let tailX = current.x + dx / length * visibleLength;
+  let tailY = current.y + dy / length * visibleLength;
+  if (tailX < WORLD_TRACK_LEFT) {
+    const t = (WORLD_TRACK_LEFT - current.x) / (tailX - current.x);
+    tailX = WORLD_TRACK_LEFT;
+    tailY = current.y + (tailY - current.y) * t;
+  } else if (tailX > WORLD_TRACK_RIGHT) {
+    const t = (WORLD_TRACK_RIGHT - current.x) / (tailX - current.x);
+    tailX = WORLD_TRACK_RIGHT;
+    tailY = current.y + (tailY - current.y) * t;
+  }
+  return [[current.x, current.y], [tailX, tailY]] satisfies Array<[number, number]>;
+}
+
+function projectIssTailDots(track: IssState["track"]) {
+  const tail = projectIssTailToCurrent(track);
+  if (!tail) return [];
+  const [current, previous] = tail;
+  return [0.2, 0.42, 0.64].map((ratio) => [
+    current[0] + (previous[0] - current[0]) * ratio,
+    current[1] + (previous[1] - current[1]) * ratio,
+  ] satisfies [number, number]);
+}
+
 function IssPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: TabId) => void }) {
   const iss = useIssState();
   const futureTrackSegments = projectIssTrack(iss.futureTrack ?? iss.track);
   const pastTrackSegments = projectIssTrack(iss.pastTrack);
+  const pastTailToCurrent = projectIssTailToCurrent(iss.pastTrack);
+  const pastTailDots = projectIssTailDots(iss.pastTrack);
   const issPoint = iss.status === "ready" && typeof iss.latitude === "number" && typeof iss.longitude === "number"
     ? projectWorldPoint(iss.longitude, iss.latitude)
     : null;
@@ -853,7 +892,9 @@ function IssPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
         </g>
         <g className="iss-tracks" clipPath="url(#world-map-clip)">
           {pastTrackSegments.map((segment, index) => <polyline key={`past-${index}`} className="iss-track past" points={segment.map(([x, y]) => `${x},${y}`).join(" ")} />)}
+          {pastTailToCurrent && <polyline className="iss-track past-touch" points={pastTailToCurrent.map(([x, y]) => `${x},${y}`).join(" ")} />}
           {futureTrackSegments.map((segment, index) => <polyline key={`future-${index}`} className="iss-track future" points={segment.map(([x, y]) => `${x},${y}`).join(" ")} />)}
+          {pastTailDots.map(([x, y], index) => <circle key={`past-tail-${index}`} className="iss-tail-dot" cx={x} cy={y} r="2.9" />)}
         </g>
         {issPoint && <>
           <circle className="iss-dot" cx={issPoint.x} cy={issPoint.y} r="8" />
