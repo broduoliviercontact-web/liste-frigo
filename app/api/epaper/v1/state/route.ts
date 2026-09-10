@@ -106,6 +106,10 @@ export async function GET(request: Request) {
           visibility: iss.visibility,
           home: { label: "Nous", latitude: 48.895, longitude: 2.409 },
           track: iss.track ?? [],
+          pastTrack: iss.latitude != null && iss.longitude != null && iss.pastTrack
+            ? [{ latitude: iss.latitude, longitude: iss.longitude }, ...[...iss.pastTrack].reverse()]
+            : [],
+          futureTrack: iss.futureTrack ?? iss.track ?? [],
         },
         air: {
           ...air,
