@@ -44,6 +44,8 @@ type IssState = {
   visibility?: string;
   stale?: boolean;
   track?: Array<{ latitude: number; longitude: number }>;
+  pastTrack?: Array<{ latitude: number; longitude: number }>;
+  futureTrack?: Array<{ latitude: number; longitude: number }>;
 };
 type EpaperWeather = {
   status: "ready" | "unavailable";
@@ -789,7 +791,8 @@ function projectIssTrack(track: IssState["track"]) {
 
 function IssPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: TabId) => void }) {
   const iss = useIssState();
-  const trackSegments = projectIssTrack(iss.track);
+  const futureTrackSegments = projectIssTrack(iss.futureTrack ?? iss.track);
+  const pastTrackSegments = projectIssTrack(iss.pastTrack);
   const issPoint = iss.status === "ready" && typeof iss.latitude === "number" && typeof iss.longitude === "number"
     ? projectWorldPoint(iss.longitude, iss.latitude)
     : null;
@@ -830,7 +833,8 @@ function IssPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
           <text x={homeMarker.x + 8} y={homeMarker.y - 6}>{homeMarker.label}</text>
         </g>
         <g className="iss-tracks" clipPath="url(#world-map-clip)">
-          {trackSegments.map((segment, index) => <polyline key={index} className="iss-track" points={segment.map(([x, y]) => `${x},${y}`).join(" ")} />)}
+          {pastTrackSegments.map((segment, index) => <polyline key={`past-${index}`} className="iss-track past" points={segment.map(([x, y]) => `${x},${y}`).join(" ")} />)}
+          {futureTrackSegments.map((segment, index) => <polyline key={`future-${index}`} className="iss-track future" points={segment.map(([x, y]) => `${x},${y}`).join(" ")} />)}
         </g>
         {issPoint && <>
           <circle className="iss-dot" cx={issPoint.x} cy={issPoint.y} r="8" />
@@ -838,7 +842,7 @@ function IssPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
         </>}
       </svg>
     </section>
-    <div className="legend-lines"><span><i className="track-swatch" /> trajectoire prévue</span><span><i className="iss-swatch" /> ISS maintenant</span><span><i className="home-swatch" /> nous</span></div>
+    <div className="legend-lines"><span><i className="track-swatch future" /> trajectoire prévue</span><span><i className="track-swatch past" /> trajectoire passée</span><span><i className="iss-swatch" /> ISS maintenant</span><span><i className="home-swatch" /> nous</span></div>
     <AppNav active="iss" settings={settings} onChange={onTab} />
   </div>;
 }

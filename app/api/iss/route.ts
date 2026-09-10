@@ -66,8 +66,9 @@ function positionAt(line1: string, line2: string, date: Date) {
 export async function readIss() {
   const [line1, line2] = await readTle();
   const now = new Date();
-  const positions = Array.from({ length: 7 }, (_, index) => positionAt(line1, line2, new Date(now.getTime() + index * 6 * 60_000)));
-  const current = positions[0];
+  const futurePositions = Array.from({ length: 7 }, (_, index) => positionAt(line1, line2, new Date(now.getTime() + index * 6 * 60_000)));
+  const pastPositions = Array.from({ length: 7 }, (_, index) => positionAt(line1, line2, new Date(now.getTime() - (6 - index) * 6 * 60_000)));
+  const current = futurePositions[0];
 
   return {
     status: "ready" as const,
@@ -77,7 +78,9 @@ export async function readIss() {
     latitude: current.latitude,
     longitude: current.longitude,
     altitudeKm: Math.round(current.altitude),
-    track: positions.map((position) => ({ latitude: position.latitude, longitude: position.longitude })),
+    track: futurePositions.map((position) => ({ latitude: position.latitude, longitude: position.longitude })),
+    pastTrack: pastPositions.map((position) => ({ latitude: position.latitude, longitude: position.longitude })),
+    futureTrack: futurePositions.map((position) => ({ latitude: position.latitude, longitude: position.longitude })),
   };
 }
 
