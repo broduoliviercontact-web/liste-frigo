@@ -122,6 +122,7 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .app-nav.dynamic.tabs-6 { --tab-count: 6; }
 .app-nav.dynamic.tabs-7 { --tab-count: 7; }
 .app-nav.dynamic.tabs-8 { --tab-count: 8; }
+.app-nav.dynamic.tabs-9 { --tab-count: 9; }
 .app-nav.dynamic button { min-width: 0; gap: 2px; padding: 4px 1px; font-size: 12px; }
 .app-nav.dynamic button span:not(.nav-icon) { overflow: hidden; font-size: 7px; letter-spacing: .02em; text-overflow: ellipsis; white-space: nowrap; }
 .app-nav.dynamic .nav-icon { font-size: 13px; line-height: 1; filter: grayscale(1) contrast(1.2); }
@@ -472,6 +473,72 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .aircraft-list > button > span:last-child { justify-items: end; text-align: right; }
 .aircraft-list strong, .aircraft-list b { font-size: 11px; }
 .aircraft-list small { overflow: hidden; max-width: 210px; font-size: 8px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+
+.boats-page { height: 100%; display: flex; flex-direction: column; padding: 25px 25px 12px; }
+.boats-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #111; padding-bottom: 14px; }
+.boats-header h1 { margin: 2px 0 0; }
+.boats-header > span { font-size: 42px; filter: grayscale(1) contrast(1.5); }
+.boats-corridor { min-height: 34px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #777; font-size: 8px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+.boats-corridor i { font-style: normal; }
+.boats-corridor b { margin-left: auto; border: 1px solid #111; padding: 3px 5px; font-size: 7px; white-space: nowrap; }
+.next-boat { padding: 15px 0 12px; border-bottom: 2px solid #111; }
+.boat-title-line { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.next-boat h2 { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; font-size: 27px; line-height: 1; text-transform: uppercase; }
+.next-boat h2 span { font-size: 25px; filter: grayscale(1); }
+.boat-type { max-width: 145px; border: 2px solid #111; padding: 5px 7px; font-size: 8px; font-weight: 900; line-height: 1.15; text-align: right; text-transform: uppercase; }
+.boat-direction { margin: 0; font-size: 14px; font-weight: 900; }
+.boat-direction small { color: #555; font-size: 8px; font-weight: 800; letter-spacing: .05em; }
+.boat-numbers { display: grid; grid-template-columns: 1.1fr 1fr 1.25fr .7fr; gap: 0; margin: 12px 0 0; border-block: 1px solid #777; }
+.boat-numbers div { padding: 6px 8px; border-right: 1px solid #aaa; }
+.boat-numbers div:first-child { padding-left: 0; }
+.boat-numbers div:last-child { border-right: 0; }
+.boat-numbers dt { color: #555; font-size: 7px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.boat-numbers dd { margin: 2px 0 0; font-size: 15px; font-weight: 900; white-space: nowrap; }
+.canal-route { min-height: 188px; margin: 0 -8px; padding: 12px 8px 15px; border-bottom: 1px solid #777; }
+.canal-chart-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.canal-chart-header strong { font-size: 13px; text-transform: uppercase; }
+.canal-chart-header > div:last-child { display: grid; justify-items: end; gap: 3px; }
+.canal-chart-header span, .canal-chart-header b { border: 1px solid #111; padding: 3px 5px; font-size: 6px; letter-spacing: .07em; }
+.canal-chart-header b { background: #111; color: #f8f7f1; }
+.canal-chart-directions { display: flex; justify-content: space-between; margin-top: 13px; color: #555; font-size: 6px; font-weight: 900; letter-spacing: .1em; }
+.canal-chart-directions b { color: #111; font-size: 7px; }
+.canal-chart { position: relative; height: 59px; margin-top: 4px; }
+.canal-water { position: absolute; top: 19px; left: 0; width: 100%; height: 17px; border-block: 2px solid #111; background: repeating-linear-gradient(90deg, transparent 0 9px, rgb(17 17 17 / 10%) 9px 10px); }
+.canal-water::after { position: absolute; top: 6px; left: 0; width: 100%; border-top: 1px dashed #777; content: ""; }
+.canal-watch-zone { position: absolute; inset-block: 2px; z-index: 1; border-inline: 2px solid #111; background: repeating-linear-gradient(135deg, rgb(17 17 17 / 16%) 0 3px, transparent 3px 7px); }
+.canal-boat { position: absolute; z-index: 3; top: -5px; display: grid; justify-items: center; translate: -50% 0; color: #111; line-height: 1; }
+.canal-boat > i { font-size: 24px; font-style: normal; filter: grayscale(1) contrast(1.5); }
+.canal-boat > small { margin-top: 1px; border: 1px solid #111; background: #f8f7f1; padding: 2px 3px; font-size: 6px; font-weight: 900; white-space: nowrap; }
+.canal-boat-paris::after, .canal-boat-bobigny::after { position: absolute; top: 31px; font-size: 9px; font-weight: 900; content: "‹‹"; }
+.canal-boat-paris::after { right: 24px; }
+.canal-boat-bobigny::after { left: 24px; rotate: 180deg; }
+.canal-home { position: absolute; z-index: 4; top: 14px; translate: -50% 0; font-style: normal; }
+.canal-home u { display: block; width: 15px; height: 15px; border: 3px solid #111; border-radius: 50%; background: #f8f7f1; }
+.canal-home em { position: absolute; top: 20px; left: 50%; translate: -50% 0; border: 1px solid #111; background: #111; color: #f8f7f1; padding: 2px 4px; font-size: 6px; font-style: normal; font-weight: 900; letter-spacing: .06em; white-space: nowrap; }
+.canal-km { position: absolute; top: 40px; color: #555; font-size: 6px; font-weight: 900; }
+.canal-km-start { left: 0; }
+.canal-km-end { right: 0; }
+.canal-landmarks { position: relative; height: 38px; border-top: 1px solid #aaa; }
+.canal-landmarks > span, .canal-landmarks > strong { position: absolute; top: 10px; display: grid; justify-items: center; translate: -50% 0; font-size: 6px; font-weight: 900; line-height: 1.1; text-align: center; white-space: nowrap; }
+.canal-landmarks > .edge { justify-items: start; translate: 0 0; text-align: left; }
+.canal-landmarks > .edge.end { justify-items: end; translate: -100% 0; text-align: right; }
+.canal-landmarks i { position: absolute; top: -14px; width: 2px; height: 10px; background: #111; }
+.canal-landmarks small { margin-top: 2px; color: #666; font-size: 5px; font-weight: 800; letter-spacing: .04em; }
+.following-boats { border-top: 3px solid #111; }
+.following-boats > header { display: flex; align-items: center; justify-content: space-between; padding: 10px 0 5px; }
+.following-boats > header span { display: grid; width: 25px; height: 25px; place-items: center; border: 2px solid #111; font-size: 9px; font-weight: 900; }
+.following-boats article { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #777; padding: 8px 2px; }
+.following-boats article div { display: grid; gap: 2px; }
+.following-boats article strong, .following-boats article b { font-size: 12px; }
+.following-boats article small { font-size: 8px; }
+.following-boat-data { justify-items: end; text-align: right; }
+.following-boats > p { margin: 14px 0; font-size: 11px; font-weight: 700; }
+.boats-empty { min-height: 150px; display: flex; align-items: center; justify-content: center; gap: 18px; border-bottom: 2px solid #111; text-align: left; }
+.boats-empty span { font-size: 48px; filter: grayscale(1); }
+.boats-empty h2 { margin: 0 0 7px; font-size: 25px; line-height: 1.08; }
+.boats-empty p { margin: 0; }
+.boats-empty p, .boats-updated { color: #555; font-size: 9px; font-weight: 800; }
+.boats-updated { margin: auto 0 4px; text-align: center; }
 
 .settings-section { padding: 16px 0; border-bottom: 3px solid #111; }
 .tab-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }

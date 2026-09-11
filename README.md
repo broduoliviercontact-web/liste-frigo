@@ -397,6 +397,16 @@ Dette technique:
 - Le contrat e-paper devrait avoir un fichier de types partage ou un schema JSON.
 - Les reglages `activeTab` web et `activeTab` firmware sont proches mais pas parfaitement unifies.
 
+## Bateaux / AIS
+
+L'onglet **Bateaux** suit les signaux AIS reçus par [AISStream](https://aisstream.io/) sur une petite zone du canal de l'Ourcq autour du métro Raymond-Queneau. La connexion WebSocket et la clé restent exclusivement côté serveur. La zone et le point « Chez nous » sont centralisés dans `server/services/aisService.ts`.
+
+Configurer `AISSTREAM_API_KEY` avec une clé AISStream. Pour tester l'API, le site et l'écran sans clé, utiliser `BOATS_USE_MOCK=true`. La route légère consommée par le site est `GET /api/boats`; l'état e-paper expose les mêmes données dans `pages.bateaux`.
+
+En développement Cloudflare local, copier `.env.example` vers `.dev.vars`, puis adapter les valeurs avant `npm run dev`. L'émulateur Vite/Cloudflare peut refuser la sortie WebSocket vers AISStream : dans ce cas l'API reste disponible avec `status: "degraded"`; utiliser `BOATS_USE_MOCK=true` pour valider l'interface locale, puis tester le flux réel sur le Worker hébergé.
+
+Tous les petits bateaux et toutes les péniches ne disposent pas nécessairement d'un émetteur AIS. Sur l'hébergement Cloudflare actuel, une seule collecte WebSocket est partagée dans chaque instance active et relancée par les lectures de l'API avec backoff. Une connexion permanente et une unicité mondiale stricte nécessiteraient un Durable Object.
+
 ## Commandes utiles
 
 Dev local:

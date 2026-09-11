@@ -6,12 +6,13 @@ import { requireSupervieAccess } from "../../../../access";
 import { readIss } from "../../../iss/route";
 import { readAirTraffic } from "../../../air/route";
 import { readWeekAgenda } from "../../../agenda/route";
+import { readBoats } from "../../../boats/route";
 
 export async function GET(request: Request) {
   try {
     const denied = await requireSupervieAccess(request);
     if (denied) return denied;
-    const [lists, weather, meals, transit, agenda, iss, air] = await Promise.all([
+    const [lists, weather, meals, transit, agenda, iss, air, boats] = await Promise.all([
       readAll(),
       readPantinWeather(),
       readWeekMeals(),
@@ -26,6 +27,7 @@ export async function GET(request: Request) {
         longitude: null,
       })),
       readAirTraffic(),
+      readBoats().catch(() => ({ status: "degraded" as const, updatedAt: new Date().toISOString(), boats: [] })),
     ]);
     const requestedId = Number(new URL(request.url).searchParams.get("listId"));
     const selectedIndex = lists.findIndex((list) => list.id === requestedId);
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
       display: { logicalWidth: 540, logicalHeight: 960, orientation: "portrait" },
       activeTab: "agenda",
       epaperSettings: {
-        visibleTabs: ["listes", "creche", "meteo", "repas", "metro", "agenda", "iss", "air"],
+        visibleTabs: ["listes", "creche", "meteo", "repas", "metro", "agenda", "iss", "air", "bateaux"],
         activeTab: "agenda",
         preferredTab: "agenda",
         carousel: { enabled: false, intervalSeconds: 120 },
@@ -131,6 +133,7 @@ export async function GET(request: Request) {
             future: plane.future,
           })),
         },
+        bateaux: boats,
       },
     });
   } catch (error) {

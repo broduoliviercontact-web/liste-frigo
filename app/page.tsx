@@ -25,7 +25,7 @@ type AgendaState = {
   upcoming: AgendaEvent[];
   days: AgendaDay[];
 };
-type TabId = "lists" | "creche" | "meteo" | "meals" | "metro" | "agenda" | "settings" | "iss" | "air";
+type TabId = "lists" | "creche" | "meteo" | "meals" | "metro" | "agenda" | "settings" | "iss" | "air" | "boats";
 type EpaperSettings = {
   visibleTabs: TabId[];
   activeTab: TabId;
@@ -82,6 +82,22 @@ type AirTrafficState = {
   scan?: { refreshSeconds: number; mode: "simulation" };
   aircraft: AirTrafficPlane[];
 };
+type BoatDirection = "PARIS" | "BOBIGNY" | "INDETERMINE";
+type BoatSummary = {
+  id: string;
+  name: string;
+  mmsi: string;
+  distanceKm: number;
+  speedKmh: number;
+  heading?: number | null;
+  direction: BoatDirection;
+  etaMinutes: number | null;
+  vesselType?: string;
+  progressPercent?: number;
+  updatedAt: string;
+};
+type BoatsRoute = { name: string; from: string; home: string; to: string; lengthKm: number; homeProgressPercent: number };
+type BoatsState = { status: "ok" | "degraded"; updatedAt?: string; route?: BoatsRoute; boats: BoatSummary[] };
 
 const tabCatalog: Array<{ id: TabId; label: string; icon: string; epaperKey: string; epaper: boolean }> = [
   { id: "lists", label: "Listes", icon: "🛒", epaperKey: "listes", epaper: true },
@@ -93,17 +109,18 @@ const tabCatalog: Array<{ id: TabId; label: string; icon: string; epaperKey: str
   { id: "settings", label: "Réglages", icon: "⚙", epaperKey: "reglages", epaper: false },
   { id: "iss", label: "ISS", icon: "✦", epaperKey: "iss", epaper: true },
   { id: "air", label: "Air", icon: "⌖", epaperKey: "air", epaper: true },
+  { id: "boats", label: "Bateaux", icon: "🚢", epaperKey: "bateaux", epaper: true },
 ];
 
 const epaperTabs = tabCatalog.filter((tab) => tab.epaper);
-const MAX_EPAPER_TABS = 8;
+const MAX_EPAPER_TABS = 9;
 
 const defaultEpaperSettings: EpaperSettings = {
-  visibleTabs: ["lists", "creche", "meteo", "meals", "metro", "agenda", "iss", "air"],
+  visibleTabs: ["lists", "creche", "meteo", "meals", "metro", "agenda", "iss", "air", "boats"],
   activeTab: "agenda",
   carouselEnabled: false,
   carouselIntervalSeconds: 120,
-  configVersion: 2,
+  configVersion: 3,
 };
 
 function epaperKeyFor(tab: TabId) {
@@ -242,6 +259,29 @@ function useAirTraffic() {
   }, []);
 
   return airTraffic;
+}
+
+function useBoats() {
+  const [state, setState] = useState<BoatsState>({ status: "degraded", boats: [] });
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/boats?at=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("boats");
+        const data = await response.json() as BoatsState;
+        if (active) setState(data);
+      } catch {
+        if (active) setState((current) => ({ ...current, status: "degraded" }));
+      }
+    };
+    void load();
+    const timer = window.setInterval(load, 20_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+
+  return state;
 }
 
 function radarBearingFor(plane: { x: number; y: number }) {
@@ -869,6 +909,63 @@ function IssPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
   </div>;
 }
 
+function BoatsPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: TabId) => void }) {
+  const state = useBoats();
+  const [next, ...following] = state.boats;
+  const route = state.route ?? { name: "Canal de l'Ourcq", from: "Pantin", home: "Raymond-Queneau", to: "Bobigny", lengthKm: 3.3, homeProgressPercent: 55 };
+  const monitoredStart = 23;
+  const monitoredEnd = 78;
+  const routePosition = (position: number) => monitoredStart + Math.min(100, Math.max(0, position)) / 100 * (monitoredEnd - monitoredStart);
+  const homeRoutePosition = routePosition(route.homeProgressPercent);
+  const directionLabel = (direction: BoatDirection) => direction === "PARIS" ? "← vers Paris" : direction === "BOBIGNY" ? "vers Bobigny →" : "sens indéterminé";
+  const etaLabel = (boat: BoatSummary) => boat.etaMinutes === null ? "—" : `~${boat.etaMinutes} min`;
+  const updatedAt = state.updatedAt
+    ? new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(state.updatedAt))
+    : "--:--";
+
+  return <div className="boats-page">
+    <header className="boats-header"><div><p className="eyebrow">CANAL DE L&apos;OURCQ</p><h1>Bateaux</h1></div><span aria-hidden="true">🚢</span></header>
+    <div className="boats-corridor"><span>{route.from}</span><i>•</i><strong>{route.home}</strong><i>•</i><span>{route.to}</span><b>{route.lengthKm.toLocaleString("fr-FR")} km suivis</b></div>
+    {next ?
+      <section className="next-boat" aria-label="Prochain passage">
+        <div className="boat-title-line"><div><p className="eyebrow">PROCHAIN PASSAGE</p><h2><span aria-hidden="true">🚢</span>{next.name}</h2></div><span className="boat-type">{next.vesselType ?? "Bateau AIS"}</span></div>
+        <p className="boat-direction">{directionLabel(next.direction)} <small>· MMSI {next.mmsi}</small></p>
+        <dl className="boat-numbers">
+          <div><dt>Distance</dt><dd>{next.distanceKm.toLocaleString("fr-FR")} km</dd></div>
+          <div><dt>Passage</dt><dd>{etaLabel(next)}</dd></div>
+          <div><dt>Vitesse</dt><dd>{next.speedKmh.toLocaleString("fr-FR")} km/h</dd></div>
+          <div><dt>Cap</dt><dd>{next.heading == null ? "—" : `${Math.round(next.heading)}°`}</dd></div>
+        </dl>
+      </section>
+      : <section className="boats-empty"><span aria-hidden="true">🚢</span><div><h2>Aucun bateau détecté</h2><p>{state.status === "degraded" ? "Flux AIS indisponible · secteur toujours affiché" : "Surveillance du canal active"}</p></div></section>}
+    <section className="canal-route" aria-label={`Trajet surveillé de ${route.from} à ${route.to}`}>
+      <header className="canal-chart-header"><div><p className="eyebrow">CARTE DU CANAL</p><strong>La Villette → Bondy</strong></div><div><span>VUE ÉLARGIE · ~8 KM</span><b>ZONE AIS · {route.lengthKm.toLocaleString("fr-FR")} KM</b></div></header>
+      <div className="canal-chart-directions"><b>← PARIS</b><span>COURANT DU CANAL · EST / OUEST</span><b>BONDY →</b></div>
+      <div className="canal-chart">
+        <div className="canal-water"><i className="canal-watch-zone" style={{ left: `${monitoredStart}%`, width: `${monitoredEnd - monitoredStart}%` }} /></div>
+        {next && <span className={`canal-boat canal-boat-${next.direction.toLowerCase()}`} style={{ left: `${routePosition(next.progressPercent ?? 50)}%` }} aria-label={`Position de ${next.name}`}><i>🚢</i><small>{next.distanceKm.toLocaleString("fr-FR")} km</small></span>}
+        <i className="canal-home" style={{ left: `${homeRoutePosition}%` }}><u /><em>CHEZ NOUS</em></i>
+        <span className="canal-km canal-km-start">0</span><span className="canal-km canal-km-end">8 km</span>
+      </div>
+      <div className="canal-landmarks" aria-hidden="true">
+        <span className="edge" style={{ left: "0%" }}><i />LA VILLETTE<small>BASSIN</small></span>
+        <span style={{ left: `${monitoredStart}%` }}><i />PANTIN<small>ZONE AIS</small></span>
+        <strong style={{ left: `${homeRoutePosition}%` }}><i />R.-QUENEAU<small>PASSAGE MAISON</small></strong>
+        <span style={{ left: `${monitoredEnd}%` }}><i />BOBIGNY<small>PARC BERGÈRE</small></span>
+        <span className="edge end" style={{ left: "100%" }}><i />BONDY<small>AMONT</small></span>
+      </div>
+    </section>
+    {next &&
+      <section className="following-boats">
+        <header><p className="eyebrow">PROCHAINS BATEAUX</p><span>{following.length}</span></header>
+        {following.length ? following.slice(0, 4).map((boat) => <article key={boat.id}><div><strong>{boat.name}</strong><small>{boat.vesselType ?? "Bateau AIS"} · {directionLabel(boat.direction)}</small></div><div className="following-boat-data"><b>{etaLabel(boat)}</b><small>{boat.distanceKm.toLocaleString("fr-FR")} km · {boat.speedKmh.toLocaleString("fr-FR")} km/h</small></div></article>) : <p>Aucun autre passage détecté</p>}
+      </section>
+    }
+    <p className="boats-updated">Dernière mise à jour · {updatedAt}</p>
+    <AppNav active="boats" settings={settings} onChange={onTab} />
+  </div>;
+}
+
 function AirPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: TabId) => void }) {
   const airTraffic = useAirTraffic();
   const targetAircraft = airTraffic.aircraft;
@@ -1313,7 +1410,7 @@ export default function Home() {
     <main className="stage">
       <section className="device" aria-label="Aperçu de l'écran SUPERVIE">
         {view !== "settings" && <button className="site-settings-button" onClick={() => setView("settings")} aria-label="Réglages du site et de l'écran">⚙</button>}
-        {view === "creche" ? <CrechePage settings={epaperSettings} onTab={setVisibleView} /> : view === "meteo" ? <MeteoPage settings={epaperSettings} onTab={setVisibleView} /> : view === "meals" ? <MealPlannerPage settings={epaperSettings} onTab={setVisibleView} /> : view === "metro" ? <MetroPage settings={epaperSettings} onTab={setVisibleView} /> : view === "agenda" ? <AgendaPage settings={epaperSettings} onTab={setVisibleView} /> : view === "settings" ? <SettingsPage settings={epaperSettings} onSettings={updateEpaperSettings} onTab={setVisibleView} /> : view === "iss" ? <IssPage settings={epaperSettings} onTab={setVisibleView} /> : view === "air" ? <AirPage settings={epaperSettings} onTab={setVisibleView} /> : <>
+        {view === "creche" ? <CrechePage settings={epaperSettings} onTab={setVisibleView} /> : view === "meteo" ? <MeteoPage settings={epaperSettings} onTab={setVisibleView} /> : view === "meals" ? <MealPlannerPage settings={epaperSettings} onTab={setVisibleView} /> : view === "metro" ? <MetroPage settings={epaperSettings} onTab={setVisibleView} /> : view === "agenda" ? <AgendaPage settings={epaperSettings} onTab={setVisibleView} /> : view === "settings" ? <SettingsPage settings={epaperSettings} onSettings={updateEpaperSettings} onTab={setVisibleView} /> : view === "iss" ? <IssPage settings={epaperSettings} onTab={setVisibleView} /> : view === "air" ? <AirPage settings={epaperSettings} onTab={setVisibleView} /> : view === "boats" ? <BoatsPage settings={epaperSettings} onTab={setVisibleView} /> : <>
         <header className="topbar">
           <div>
             <p className="eyebrow">SUPERVIE · LISTE PARTAGÉE</p>
