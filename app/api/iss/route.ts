@@ -1,4 +1,5 @@
 import { requireSupervieAccess } from "../../access";
+import { fetchWithTimeout } from "../fetch-with-timeout";
 import { degreesLat, degreesLong, eciToGeodetic, gstime, propagate, twoline2satrec } from "satellite.js";
 
 const TLE_URL = "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE";
@@ -11,8 +12,11 @@ const FALLBACK_TLE = [
 let tleCache: { lines: readonly [string, string]; expiresAt: number } | null = null;
 
 function describePosition(latitude: number, longitude: number) {
-  if (latitude < -60) return "Océan Austral";
+  if (latitude < -60) return "Région antarctique";
   if (latitude > 66) return "Région arctique";
+  if (latitude > 35 && longitude >= -10 && longitude <= 45) return "Europe";
+  if (latitude > 5 && longitude > 20 && longitude < 150) return "Asie";
+  if (latitude > -35 && longitude >= -20 && longitude <= 55) return "Afrique";
   if (longitude >= -70 && longitude <= 20) {
     if (latitude >= 0) return "Océan Atlantique Nord";
     return "Océan Atlantique Sud";
@@ -22,16 +26,13 @@ function describePosition(latitude: number, longitude: number) {
     if (latitude >= 0) return "Océan Pacifique Nord";
     return "Océan Pacifique Sud";
   }
-  if (latitude > 35 && longitude >= -10 && longitude <= 45) return "Europe";
-  if (latitude > 5 && longitude > 20 && longitude < 150) return "Asie";
-  if (latitude > -35 && longitude >= -20 && longitude <= 55) return "Afrique";
   return "Au-dessus de la Terre";
 }
 
 async function readTle() {
   if (tleCache && tleCache.expiresAt > Date.now()) return tleCache.lines;
   try {
-    const response = await fetch(TLE_URL, {
+    const response = await fetchWithTimeout(TLE_URL, {
       headers: { Accept: "text/plain" },
       cf: { cacheEverything: true, cacheTtl: 21_600 },
     } as RequestInit);
@@ -52,9 +53,11 @@ async function readTle() {
 function positionAt(line1: string, line2: string, date: Date) {
   const satellite = twoline2satrec(line1, line2);
   const propagated = propagate(satellite, date);
-  if (!propagated.position || !propagated.velocity) throw new Error("Calcul orbital ISS impossible");
-  const geodetic = eciToGeodetic(propagated.position, gstime(date));
-  const velocity = Math.hypot(propagated.velocity.x, propagated.velocity.y, propagated.velocity.z) * 3600;
+  const position = propagated?.position;
+  const velocityVector = propagated?.velocity;
+  if (!position || !velocityVector) throw new Error("Calcul orbital ISS impossible");
+  const geodetic = eciToGeodetic(position, gstime(date));
+  const velocity = Math.hypot(velocityVector.x, velocityVector.y, velocityVector.z) * 3600;
   return {
     latitude: degreesLat(geodetic.latitude),
     longitude: degreesLong(geodetic.longitude),

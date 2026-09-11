@@ -14,9 +14,20 @@ function cookieValue(header: string | null, name: string) {
   return header.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1) ?? "";
 }
 
+function decodedCookieValue(header: string | null, name: string) {
+  const value = cookieValue(header, name);
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    // A malformed cookie is not an access credential.  More importantly, it
+    // must not turn an authorization check into a 500 response.
+    return "";
+  }
+}
+
 export async function hasSupervieAccess(request: Request) {
   const expected = await configuredAccessCode();
-  const provided = request.headers.get(ACCESS_HEADER) ?? cookieValue(request.headers.get("cookie"), ACCESS_COOKIE);
+  const provided = request.headers.get(ACCESS_HEADER) ?? decodedCookieValue(request.headers.get("cookie"), ACCESS_COOKIE);
   return expected.length > 0 && provided.length === expected.length && provided === expected;
 }
 

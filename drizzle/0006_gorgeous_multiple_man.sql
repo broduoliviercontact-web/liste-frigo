@@ -1,0 +1,1 @@
+ALTER TABLE `list_mutations` ADD `outcome` text DEFAULT 'applied' NOT NULL;

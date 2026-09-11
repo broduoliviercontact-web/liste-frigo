@@ -18,7 +18,7 @@ Fonctionnalites disponibles:
 - Onglet Agenda: prototype "Semaine compacte" avec 7 jours et 2 evenements maximum par jour.
 - Onglet ISS: position orbitale calculee a partir de TLE CelesTrak avec carte monde.
 - Onglet Air: simulation radar autour de Pantin, partagee par le site et l'API e-paper.
-- Onglet Reglages: configuration locale des onglets visibles, onglet actif et carrousel.
+- Onglet Reglages: configuration partagee des onglets visibles, de la preference d'onglet au demarrage et du carrousel.
 - API e-paper agregee: `/api/epaper/v1/state`.
 
 Important: l'onglet Agenda est actuellement un prototype avec donnees statiques dans `app/page.tsx`. Il n'a pas encore de table D1 ni de synchronisation calendrier.
@@ -102,9 +102,11 @@ Le catalogue d'onglets est `tabCatalog`. Chaque entree contient:
 - `epaperKey`: cle envoyee au firmware.
 - `epaper`: indique si l'onglet peut apparaitre dans la navigation e-paper.
 
-La barre du bas est rendue par `AppNav`. Elle utilise `epaperSettings.visibleTabs`, limitee a `MAX_EPAPER_TABS = 8`. Le style `tabs-8` compacte les libelles et les pictogrammes pour garder les 8 onglets lisibles sur 540 px.
+La barre du bas est rendue par `AppNav`. Elle utilise `epaperSettings.visibleTabs`, limitee a `MAX_EPAPER_TABS = 9`. Le style dynamique compacte les libelles et les pictogrammes pour garder les neuf onglets lisibles sur 540 px.
 
-Les reglages sont stockes dans `localStorage` sous `supervie-epaper-settings`. Ils ne sont pas encore persistants cote serveur.
+Les reglages sont caches dans `localStorage` sous `supervie-epaper-settings` pour rester affichables hors ligne, puis enregistres dans D1 via `/api/epaper-settings`. Les navigateurs relisent cette configuration toutes les 10 secondes. Une reponse de lecture demarree avant une modification locale est ignoree, afin de ne pas ecraser cette modification.
+
+Navigation partagee : choisir un onglet dans un navigateur modifie sa vue locale et enregistre `activeTab`/`preferredTab` pour le prochain demarrage de l'ecran. Cela ne force pas l'ecran deja allume a changer d'onglet : le firmware conserve sa navigation tactile et son carrousel entre deux rafraichissements. En revanche, si un navigateur masque l'onglet actuellement affiche par l'ecran, le firmware bascule vers une page visible. Deux navigateurs qui sauvegardent simultanement les reglages suivent actuellement la regle du dernier enregistrement gagne.
 
 ## Onglets
 
@@ -165,7 +167,7 @@ Les reglages sont stockes dans `localStorage` sous `supervie-epaper-settings`. I
 
 `Reglages`
 
-- Vue web locale, non exposee au firmware comme onglet e-paper.
+- Vue web, non exposee au firmware comme onglet e-paper.
 - Modifie `visibleTabs`, `activeTab`, `carouselEnabled`, `carouselIntervalSeconds`.
 - Affiche un JSON compatible avec la forme attendue par le firmware.
 
@@ -255,7 +257,9 @@ Elle renvoie un snapshot JSON avec:
 - `pages.iss`
 - `pages.air`
 
-`/api/epaper/v1/state` renvoie maintenant les 8 onglets visibles par defaut: `["listes", "creche", "meteo", "repas", "metro", "agenda", "iss", "air"]`.
+`/api/epaper/v1/state` renvoie les neuf onglets visibles par defaut, dont
+`bateaux`. Les reglages e-paper sont partages entre navigateurs et firmware ;
+l'interface les relit periodiquement depuis le serveur.
 
 ## Base de donnees
 
@@ -264,13 +268,29 @@ Tables Drizzle versionnees:
 - `shopping_lists`
 - `shopping_items`
 - `meal_plans`
+- `agenda_events`
+- `app_settings` (reglages e-paper)
+- `transit_snapshots`
 
-Tables creees directement par certaines routes si besoin:
-
-- `transit_snapshots`, creee dans `app/api/transit/route.ts`.
-- `meal_plans` est aussi assuree au runtime dans `app/api/meals/route.ts` pour robustesse.
+Les migrations Drizzle sont la source de verite pour une nouvelle base. Les
+routes conservent `CREATE TABLE IF NOT EXISTS` comme filet de securite pour les
+anciens environnements, mais un deploiement doit appliquer les migrations avant
+de servir le trafic.
 
 Le binding D1 s'appelle `DB` et est declare dans `.openai/hosting.json`.
+
+## Protection de la connexion
+
+Le code d'acces est verifie par `POST /api/access`. Aucun limiteur distribue
+n'est active dans le code : la configuration d'hebergement expose D1, mais ni
+Durable Object ni regle WAF. Un compteur en memoire ou KV seul ne serait pas
+fiable entre instances. Avant publication, creer dans Cloudflare une regle WAF
+**Rate limiting** ciblee sur `POST` et le chemin `/api/access`, avec le client
+IP comme caracteristique de comptage, un seuil et une fenetre definis par le
+produit (par exemple 5 echecs en 10 minutes), puis une action `Managed
+Challenge` ou `Block` temporaire. Verifier que la zone de l'hebergement Sites
+permet cette regle et tester depuis deux adresses IP ; sans cette configuration,
+la protection distribuee contre les essais de code n'est pas active.
 
 Limites applicatives:
 
@@ -403,7 +423,7 @@ L'onglet **Bateaux** suit les signaux AIS reçus par [AISStream](https://aisstre
 
 Configurer `AISSTREAM_API_KEY` avec une clé AISStream. Pour tester l'API, le site et l'écran sans clé, utiliser `BOATS_USE_MOCK=true`. La route légère consommée par le site est `GET /api/boats`; l'état e-paper expose les mêmes données dans `pages.bateaux`.
 
-En développement Cloudflare local, copier `.env.example` vers `.dev.vars`, puis adapter les valeurs avant `npm run dev`. L'émulateur Vite/Cloudflare peut refuser la sortie WebSocket vers AISStream : dans ce cas l'API reste disponible avec `status: "degraded"`; utiliser `BOATS_USE_MOCK=true` pour valider l'interface locale, puis tester le flux réel sur le Worker hébergé.
+En développement Cloudflare local, copier `.env.example` vers `.dev.vars`, puis adapter les valeurs avant `npm run dev:local`. Cette commande applique les migrations uniquement à la base Miniflare sous `.wrangler/state`, puis démarre Vite. Elle ne contacte jamais D1 distant. L'émulateur Vite/Cloudflare peut refuser la sortie WebSocket vers AISStream : dans ce cas l'API reste disponible avec `status: "degraded"`; utiliser `BOATS_USE_MOCK=true` pour valider l'interface locale, puis tester le flux réel sur le Worker hébergé.
 
 Tous les petits bateaux et toutes les péniches ne disposent pas nécessairement d'un émetteur AIS. Sur l'hébergement Cloudflare actuel, une seule collecte WebSocket est partagée dans chaque instance active et relancée par les lectures de l'API avec backoff. Une connexion permanente et une unicité mondiale stricte nécessiteraient un Durable Object.
 
@@ -412,7 +432,7 @@ Tous les petits bateaux et toutes les péniches ne disposent pas nécessairement
 Dev local:
 
 ```bash
-npm run dev
+npm run dev:local
 ```
 
 Build production:

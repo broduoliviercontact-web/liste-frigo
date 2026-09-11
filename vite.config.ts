@@ -11,7 +11,7 @@ const { d1, r2 } = hostingConfig;
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 
-const localBindingConfig = {
+const workerBindingConfig = {
   main: "./worker/index.ts",
   compatibility_flags: ["nodejs_compat"],
   d1_databases: d1
@@ -20,6 +20,7 @@ const localBindingConfig = {
           binding: d1,
           database_name: "site-creator-d1",
           database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          migrations_dir: "./drizzle",
         },
       ]
     : [],
@@ -33,7 +34,18 @@ const localBindingConfig = {
     : [],
 };
 
-export default defineConfig(async () => {
+const localBindingConfig = {
+  ...workerBindingConfig,
+  // These values exist only in Miniflare. They keep local integration tests
+  // deterministic and prevent a local Worker from opening AISStream.
+  vars: {
+    SUPERVIE_ACCESS_CODE: "supervie",
+    BOATS_USE_MOCK: "true",
+    SUPERVIE_LOCAL_MOCKS: "true",
+  },
+};
+
+export default defineConfig(async ({ command }) => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= "false";
@@ -57,7 +69,9 @@ export default defineConfig(async () => {
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
         inspectorPort: false,
-        config: localBindingConfig,
+        // Production bindings and secrets are injected by Cloudflare. Never
+        // serialize the local test access code into a deployable artifact.
+        config: command === "serve" ? localBindingConfig : workerBindingConfig,
       }),
     ],
   };

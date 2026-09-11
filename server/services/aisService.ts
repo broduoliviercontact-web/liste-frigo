@@ -117,7 +117,7 @@ export function directionFor(heading: number | null, speedKnots: number | null):
   return "INDETERMINE";
 }
 
-export function calculateEtaMinutes(boat: Pick<NormalizedBoat, "lat" | "lon" | "speedKnots" | "heading">, home = HOME_CANAL_POINT) {
+export function calculateEtaMinutes(boat: Pick<NormalizedBoat, "lat" | "lon" | "speedKnots" | "heading">, home: Point = HOME_CANAL_POINT) {
   if (boat.speedKnots === null || boat.speedKnots < MIN_MOVING_SPEED_KNOTS || boat.heading === null) return null;
   const bearingToHome = bearingDegrees(boat, home);
   if (angleDifference(boat.heading, bearingToHome) > 70) return null;

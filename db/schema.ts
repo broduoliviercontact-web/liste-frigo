@@ -38,3 +38,25 @@ export const agendaEvents = sqliteTable("agenda_events", {
   index("agenda_events_date_idx").on(table.date),
   index("agenda_events_date_time_idx").on(table.date, table.time),
 ]);
+
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export const transitSnapshots = sqliteTable("transit_snapshots", {
+  cacheKey: text("cache_key").primaryKey(),
+  updatedAt: text("updated_at").notNull(),
+  checkedAt: integer("checked_at").notNull(),
+  payload: text("payload").notNull(),
+});
+
+export const listMutations = sqliteTable("list_mutations", {
+  id: text("id").primaryKey(),
+  requestHash: text("request_hash"),
+  completed: integer("completed", { mode: "boolean" }).notNull().default(false),
+  outcome: text("outcome").notNull().default("applied"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+});

@@ -1,4 +1,5 @@
 // Approximate Pantin location used for local weather forecasts.
+import { fetchWithTimeout } from "../../fetch-with-timeout";
 const PANTIN_LATITUDE = 48.8924;
 const PANTIN_LONGITUDE = 2.4248;
 const WEATHER_CACHE_MS = 2 * 60 * 1000;
@@ -95,7 +96,7 @@ function nextForecastAtHour(points: MetNoPoint[], startTime: string, hour: numbe
 async function readCurrentConditions() {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${PANTIN_LATITUDE}&longitude=${PANTIN_LONGITUDE}&current=temperature_2m,precipitation,rain,showers,weather_code&timezone=Europe%2FParis&forecast_days=1`;
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: { Accept: "application/json", "User-Agent": "SUPERVIE/1.0 contact@supervie.local" },
       cf: { cacheEverything: true, cacheTtl: 120 },
     } as RequestInit);
@@ -112,7 +113,7 @@ export async function readPantinWeather(): Promise<EpaperWeather> {
 
   try {
     const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${PANTIN_LATITUDE}&lon=${PANTIN_LONGITUDE}`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: { Accept: "application/json", "User-Agent": "SUPERVIE/1.0 contact@supervie.local" },
       // Cloudflare keeps the provider response at the edge between e-paper polls.
       cf: { cacheEverything: true, cacheTtl: 900 },

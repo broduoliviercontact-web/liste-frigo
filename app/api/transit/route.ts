@@ -1,4 +1,6 @@
 import { requireSupervieAccess } from "../../access";
+import { fetchWithTimeout } from "../fetch-with-timeout";
+import { currentTransit, isFreshTransit } from "./state";
 
 type TransitFavorite = {
   id: string;
@@ -73,7 +75,7 @@ async function readStop(stopRef: string, favorite: TransitFavorite, apiKey: stri
   url.searchParams.set("MonitoringRef", `STIF:StopPoint:Q:${stopRef}:`);
   url.searchParams.set("LineRef", `STIF:Line::${favorite.lineRef}:`);
   url.searchParams.set("MaximumStopVisits", "3");
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: { Accept: "application/json", apikey: apiKey },
     cf: { cacheEverything: true, cacheTtl: 600 },
   } as RequestInit);
@@ -121,34 +123,37 @@ async function readLine(favorite: TransitFavorite, apiKey: string): Promise<Tran
 }
 
 export async function readTransit() {
-  if (cached && cached.expiresAt > Date.now()) return { updatedAt: cached.updatedAt, lines: cached.lines };
+  if (cached && cached.expiresAt > Date.now()) return currentTransit(cached);
   const snapshot = await readSnapshot();
-  if (snapshot && snapshot.checkedAt + CACHE_MS > Date.now()) {
-    cached = { expiresAt: snapshot.checkedAt + CACHE_MS, updatedAt: snapshot.updatedAt, lines: snapshot.lines };
-    return { updatedAt: snapshot.updatedAt, lines: snapshot.lines };
+  const freshSnapshot = snapshot && isFreshTransit(snapshot.updatedAt) ? snapshot : null;
+  if (freshSnapshot && freshSnapshot.checkedAt + CACHE_MS > Date.now()) {
+    cached = { expiresAt: freshSnapshot.checkedAt + CACHE_MS, updatedAt: freshSnapshot.updatedAt, lines: freshSnapshot.lines };
+    return currentTransit(freshSnapshot);
   }
   const { env } = await import("cloudflare:workers");
   const apiKey = typeof env.IDFM_PRIM_API_KEY === "string" ? env.IDFM_PRIM_API_KEY : "";
-  if (!apiKey) return snapshot ?? { updatedAt: new Date().toISOString(), lines: favorites.map((line) => ({ ...line, available: false, passages: [] })) };
+  if (!apiKey) return freshSnapshot
+    ? currentTransit(freshSnapshot)
+    : currentTransit({ updatedAt: snapshot?.updatedAt ?? "", lines: favorites.map((line) => ({ ...line, available: false, passages: [] })) });
   const lines = await Promise.all(favorites.map((line) => readLine(line, apiKey)));
   const updatedAt = new Date().toISOString();
   if (lines.some((line) => line.available)) {
     lastSuccessful = { updatedAt, lines };
     await saveSnapshot(updatedAt, lines);
     cached = { expiresAt: Date.now() + CACHE_MS, updatedAt, lines };
-  } else if (snapshot) {
-    await saveSnapshot(snapshot.updatedAt, snapshot.lines);
-    cached = { expiresAt: Date.now() + FAILURE_CACHE_MS, updatedAt: snapshot.updatedAt, lines: snapshot.lines };
-  } else if (lastSuccessful) {
+  } else if (freshSnapshot) {
+    // Do not write a failed read back: that would refresh checked_at forever.
+    cached = { expiresAt: Date.now() + FAILURE_CACHE_MS, updatedAt: freshSnapshot.updatedAt, lines: freshSnapshot.lines };
+  } else if (lastSuccessful && isFreshTransit(lastSuccessful.updatedAt)) {
     cached = { expiresAt: Date.now() + FAILURE_CACHE_MS, ...lastSuccessful };
   } else {
     cached = { expiresAt: Date.now() + FAILURE_CACHE_MS, updatedAt, lines };
   }
-  return { updatedAt: cached.updatedAt, lines: cached.lines };
+  return currentTransit(cached);
 }
 
 export async function GET(request: Request) {
   const denied = await requireSupervieAccess(request);
   if (denied) return denied;
-  return Response.json(await readTransit());
+  return Response.json(await readTransit(), { headers: { "Cache-Control": "no-store" } });
 }

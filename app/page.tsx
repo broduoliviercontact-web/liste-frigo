@@ -1,9 +1,12 @@
 "use client";
 
 import { CSSProperties, FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { SerializedMutationQueue, isCurrentSettingsResponse } from "./client-mutation-queue";
+import { loadPendingListMutations, PENDING_LIST_MUTATION_TTL_MS, readPendingListMutations, supportsPendingMutationLocks, updatePendingListMutations, withPendingListMutationLock, type PendingListMutation } from "./pending-list-mutations";
 
 type Item = { id: number; label: string; checked: boolean };
 type ShoppingList = { id: number; name: string; items: Item[] };
+const currentTimestamp = () => Date.now();
 type Meal = { id: number; date: string; moment: "midi" | "soir"; label: string };
 type AgendaEvent = {
   id: number;
@@ -127,6 +130,24 @@ function epaperKeyFor(tab: TabId) {
   return tabCatalog.find((entry) => entry.id === tab)?.epaperKey ?? "listes";
 }
 
+function localEpaperSettings(value: unknown): EpaperSettings | null {
+  if (!value || typeof value !== "object") return null;
+  const input = value as { visibleTabs?: unknown; activeTab?: unknown; carousel?: { enabled?: unknown; intervalSeconds?: unknown } };
+  if (!Array.isArray(input.visibleTabs) || typeof input.activeTab !== "string") return null;
+  const visibleTabs = input.visibleTabs
+    .map((key) => typeof key === "string" ? epaperTabs.find((tab) => tab.epaperKey === key)?.id : undefined)
+    .filter((tab): tab is TabId => Boolean(tab));
+  const activeTab = epaperTabs.find((tab) => tab.epaperKey === input.activeTab)?.id;
+  if (!visibleTabs.length || !activeTab || !visibleTabs.includes(activeTab)) return null;
+  return {
+    visibleTabs,
+    activeTab,
+    carouselEnabled: Boolean(input.carousel?.enabled),
+    carouselIntervalSeconds: Math.max(30, Number(input.carousel?.intervalSeconds) || 120),
+    configVersion: defaultEpaperSettings.configVersion,
+  };
+}
+
 function tabFromQuery() {
   if (typeof window === "undefined") return null;
   const requestedView = new URLSearchParams(window.location.search).get("view");
@@ -167,6 +188,9 @@ function useIssState() {
     try {
       const cached = JSON.parse(window.localStorage.getItem("supervie-iss-last-position") ?? "null") as IssState | null;
       if (cached?.status === "ready" && cached.updatedAt && typeof cached.latitude === "number" && typeof cached.longitude === "number") {
+        // Cached state is intentionally rendered immediately while the live
+        // request below is pending.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIss({ ...cached, stale: true });
       }
     } catch {
@@ -301,8 +325,8 @@ function didSweepPass(previousAngle: number, currentAngle: number, targetAngle: 
 }
 
 function sameAirTrafficPlane(a?: AirTrafficPlane, b?: AirTrafficPlane) {
-  return Boolean(a && b) &&
-    a.x === b.x &&
+  if (!a || !b) return false;
+  return a.x === b.x &&
     a.y === b.y &&
     a.heading === b.heading &&
     a.altitudeM === b.altitudeM &&
@@ -417,7 +441,11 @@ function CrechePage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab
     <section className="morning-card">
       <div className="period-title"><div><p className="eyebrow">MAINTENANT</p><strong>{departureTemperature}</strong></div><span>{rainLabel}</span></div>
       <div className="avatar-and-clothes">
-        <div className="baby-avatar"><img src={weather.image} alt={`César habillé pour un temps ${weather.label.toLowerCase()}, avec son doudou girafe`} /></div>
+        <div className="baby-avatar">
+          {/* This local illustration is intentionally served as-is. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={weather.image} alt={`César habillé pour un temps ${weather.label.toLowerCase()}, avec son doudou girafe`} />
+        </div>
         <ul>{weather.clothes.map((item) => <li key={item}>{item}</li>)}</ul>
       </div>
     </section>
@@ -856,7 +884,7 @@ function IssPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
   const futureTrackSegments = projectIssTrack(iss.futureTrack ?? iss.track);
   const pastTrackSegments = projectIssTrack(iss.pastTrack && currentTrackPoint ? [currentTrackPoint, ...[...iss.pastTrack].reverse()] : undefined);
   const issPoint = iss.status === "ready" && currentTrackPoint
-    ? projectWorldPoint(iss.longitude, iss.latitude)
+    ? projectWorldPoint(iss.longitude!, iss.latitude!)
     : null;
   const speed = typeof iss.speedKmh === "number" ? new Intl.NumberFormat("fr-FR").format(iss.speedKmh) : "—";
   const over = iss.over ?? "ISS indisponible";
@@ -974,7 +1002,7 @@ function AirPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
   const [selectedAircraftId, setSelectedAircraftId] = useState("");
   const pendingAircraftRef = useRef<Map<string, AirTrafficPlane>>(new Map());
   const displayedAircraftRef = useRef<AirTrafficPlane[]>([]);
-  const radarStartedAt = useRef(Date.now());
+  const radarStartedAt = useRef(0);
   const aircraft = displayedAircraft.length ? displayedAircraft : targetAircraft;
   const selectedAircraft = aircraft.find((plane) => plane.id === selectedAircraftId) ?? aircraft[0];
 
@@ -1007,6 +1035,7 @@ function AirPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
 
   useEffect(() => {
     let animationFrame = 0;
+    if (radarStartedAt.current === 0) radarStartedAt.current = Date.now();
     let previousSweepAngle = radarSweepAngle(radarStartedAt.current);
 
     const revealPendingAircraft = () => {
@@ -1045,11 +1074,6 @@ function AirPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
       window.cancelAnimationFrame(animationFrame);
     };
   }, []);
-
-  useEffect(() => {
-    if (!aircraft.length) return;
-    if (!aircraft.some((plane) => plane.id === selectedAircraftId)) setSelectedAircraftId(aircraft[0].id);
-  }, [aircraft, selectedAircraftId]);
 
   const formatMeters = (value?: number) => typeof value === "number" ? `${new Intl.NumberFormat("fr-FR").format(value)} m` : "--";
   const formatSpeed = (value?: number) => typeof value === "number" ? `${value} km/h` : "--";
@@ -1127,7 +1151,7 @@ function AirPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
         <g className="road-labels">
           <text x="45" y="32" transform="rotate(82 45 32)">D 115</text>
           <text x="77" y="17" transform="rotate(-7 77 17)">A 3</text>
-          <text x="73" y="54" transform="rotate(-12 73 54)">CANAL DE L'OURCQ</text>
+          <text x="73" y="54" transform="rotate(-12 73 54)">CANAL DE L’OURCQ</text>
         </g>
         <g className="tower-marker" transform="translate(54 64)">
           <circle r="3" />
@@ -1235,17 +1259,30 @@ export default function Home() {
   const [newItemsText, setNewItemsText] = useState("");
   const [newListName, setNewListName] = useState("");
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
+  const [mutationNotice, setMutationNotice] = useState("");
   const [view, setView] = useState<TabId>("lists");
   const [epaperSettings, setEpaperSettings] = useState<EpaperSettings>(defaultEpaperSettings);
   const [access, setAccess] = useState<"checking" | "denied" | "granted">("checking");
   const listRevision = useRef(0);
-  const mutationInFlight = useRef(false);
+  const settingsRevision = useRef(0);
+  // React may not re-render between two physical taps. Keep the intended
+  // checkbox state separately so rapid taps still enqueue alternating writes.
+  const pendingChecked = useRef(new Map<number, boolean>());
+  const retryMutationIds = useRef(new Map<string, string>());
+  const pendingMutations = useRef<PendingListMutation[]>([]);
+  const retryTimers = useRef(new Map<string, number>());
+  const mutateRef = useRef<((action: Record<string, unknown>, resumed?: PendingListMutation) => Promise<ShoppingList[] | null>) | null>(null);
+  const mutationInFlight = useRef(0);
+  const mutationQueue = useRef(new SerializedMutationQueue());
 
   useEffect(() => {
     const requestedTab = tabFromQuery();
     const saved = window.localStorage.getItem("supervie-epaper-settings");
     if (!saved) {
       if (requestedTab) {
+        // The query parameter is an external navigation input synchronized on
+        // mount; it must be reflected in the local preview.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setEpaperSettings((current) => ({ ...current, activeTab: requestedTab }));
         setView(requestedTab);
       }
@@ -1290,19 +1327,31 @@ export default function Home() {
     };
     if (!normalized.visibleTabs.length) normalized.visibleTabs = ["lists"];
     if (!normalized.visibleTabs.includes(normalized.activeTab)) normalized.activeTab = normalized.visibleTabs[0] ?? "lists";
+    settingsRevision.current += 1;
     setEpaperSettings(normalized);
     window.localStorage.setItem("supervie-epaper-settings", JSON.stringify(normalized));
+    // Keep the browser preview responsive while persisting the exact settings
+    // consumed by the e-paper aggregate endpoint.
+    void fetch("/api/epaper-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        visibleTabs: normalized.visibleTabs.map(epaperKeyFor),
+        activeTab: epaperKeyFor(normalized.activeTab),
+        preferredTab: epaperKeyFor(normalized.activeTab),
+        carousel: { enabled: normalized.carouselEnabled, intervalSeconds: normalized.carouselIntervalSeconds },
+      }),
+    });
     setView(normalized.activeTab);
   }, []);
 
   const setVisibleView = useCallback((tab: TabId) => {
-    setView(tab);
-    setEpaperSettings((current) => {
-      const next = tab === "settings" ? current : { ...current, activeTab: tab };
-      window.localStorage.setItem("supervie-epaper-settings", JSON.stringify(next));
-      return next;
-    });
-  }, []);
+    if (tab === "settings") {
+      setView(tab);
+      return;
+    }
+    updateEpaperSettings({ ...epaperSettings, activeTab: tab });
+  }, [epaperSettings, updateEpaperSettings]);
 
   useEffect(() => {
     void fetch("/api/access", { cache: "no-store" })
@@ -1312,14 +1361,14 @@ export default function Home() {
   }, []);
 
   const loadLists = useCallback(async (quiet = false) => {
-    if (mutationInFlight.current) return;
+    if (mutationInFlight.current > 0) return;
     const requestRevision = listRevision.current;
     if (!quiet) setSyncState("loading");
     try {
       const response = await fetch("/api/lists", { cache: "no-store" });
       if (!response.ok) throw new Error("sync");
       const data = await response.json() as { lists: ShoppingList[] };
-      if (requestRevision !== listRevision.current || mutationInFlight.current) return;
+      if (requestRevision !== listRevision.current || mutationInFlight.current > 0) return;
       setLists(data.lists);
       setCurrentListId((current) => data.lists.some((list) => list.id === current) ? current : data.lists[0]?.id ?? 0);
       setSyncState("synced");
@@ -1333,19 +1382,178 @@ export default function Home() {
     return () => { window.clearTimeout(initialTimer); window.clearInterval(timer); };
   }, [access, loadLists]);
 
-  async function mutate(action: Record<string, unknown>) {
-    if (mutationInFlight.current) return null;
-    mutationInFlight.current = true;
+  useEffect(() => {
+    if (access !== "granted") return;
+    let active = true;
+    const loadSettings = async () => {
+      const requestRevision = settingsRevision.current;
+      try {
+        const response = await fetch("/api/epaper-settings", { cache: "no-store" });
+        if (!response.ok) return;
+        const next = localEpaperSettings(await response.json());
+        if (!active || !next || !isCurrentSettingsResponse(requestRevision, settingsRevision.current)) return;
+        setEpaperSettings(next);
+        window.localStorage.setItem("supervie-epaper-settings", JSON.stringify(next));
+      } catch {
+        // The local cached settings remain usable when the network is down.
+      }
+    };
+    void loadSettings();
+    const timer = window.setInterval(loadSettings, 10_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [access]);
+
+  const cancelScheduledRetry = useCallback((mutationId: string) => {
+    const timer = retryTimers.current.get(mutationId);
+    if (timer !== undefined) window.clearTimeout(timer);
+    retryTimers.current.delete(mutationId);
+  }, []);
+
+  const scheduleRetry = useCallback((entry: PendingListMutation) => {
+    cancelScheduledRetry(entry.id);
+    const expiresAt = entry.createdAt + PENDING_LIST_MUTATION_TTL_MS;
+    const nextAttemptAt = entry.nextAttemptAt ?? currentTimestamp();
+    if (entry.status !== "rate_limited" || (entry.retryCount ?? 0) >= 3 || nextAttemptAt > expiresAt) return;
+    const timer = window.setTimeout(() => {
+      retryTimers.current.delete(entry.id);
+      const current = pendingMutations.current.find((candidate) => candidate.id === entry.id);
+      if (!current || current.status !== "rate_limited" || (current.retryCount ?? 0) >= 3 || (current.nextAttemptAt ?? 0) > currentTimestamp()) return;
+      void mutateRef.current?.(current.action, current);
+    }, Math.max(0, nextAttemptAt - currentTimestamp()));
+    retryTimers.current.set(entry.id, timer);
+  }, [cancelScheduledRetry]);
+
+  useEffect(() => () => {
+    for (const timer of retryTimers.current.values()) window.clearTimeout(timer);
+    retryTimers.current.clear();
+  }, []);
+
+  const updatePendingJournal = useCallback(async (update: (entries: PendingListMutation[]) => PendingListMutation[]) => {
+    const next = await updatePendingListMutations(window.localStorage, update);
+    pendingMutations.current = next;
+    return next;
+  }, []);
+
+  const mutate = useCallback(async (action: Record<string, unknown>, resumed?: PendingListMutation) => {
+    // Serialize writes instead of dropping an action made while a slow request
+    // is in flight.  Each caller still receives the result of its own write.
+    if (!supportsPendingMutationLocks()) {
+      setSyncState("error"); setMutationNotice("Reprise multi-onglets indisponible : action non envoyée"); return null;
+    }
+    const actionKey = JSON.stringify(action);
+    const mutationId = resumed?.id ?? retryMutationIds.current.get(actionKey) ?? crypto.randomUUID();
+    retryMutationIds.current.set(actionKey, mutationId);
+    if (!resumed) {
+      const entry: PendingListMutation = { id: mutationId, action, createdAt: currentTimestamp(), status: "pending" };
+      try { await updatePendingJournal((entries) => [...entries.filter((candidate) => candidate.id !== mutationId), entry]); }
+      catch { setSyncState("error"); setMutationNotice("Enregistrement local indisponible : action non envoyée"); return null; }
+    }
+    mutationInFlight.current += 1;
     listRevision.current += 1;
     setSyncState("loading");
-    try {
-      const response = await fetch("/api/lists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(action) });
-      if (!response.ok) throw new Error("sync");
-      const data = await response.json() as { lists: ShoppingList[] };
-      setLists(data.lists); setSyncState("synced"); return data.lists;
-    } catch { setSyncState("error"); return null; }
-    finally { mutationInFlight.current = false; }
-  }
+    const perform = async () => {
+      try {
+        const persisted = loadPendingListMutations(window.localStorage).find((entry) => entry.id === mutationId);
+        if (!persisted) return null;
+        if (persisted.status === "rejected" || (!resumed && persisted.status === "auth_required") || (persisted.status === "rate_limited" && ((persisted.retryCount ?? 0) >= 3 || (persisted.nextAttemptAt ?? 0) > currentTimestamp()))) return null;
+        let response: Response | null = null;
+        // If the server committed but the response was lost, repeat the same
+        // idempotent action once. A different action always gets a new key.
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            response = await fetch("/api/lists", { method: "POST", headers: { "Content-Type": "application/json", "x-supervie-mutation-id": mutationId }, body: JSON.stringify(persisted.action) });
+            if (response.status !== 409 || attempt === 1) break;
+          } catch {
+            if (attempt === 1) throw new Error("sync");
+          }
+        }
+        if (!response) throw new Error("sync");
+        if (!response.ok) {
+          const responseError = await response.clone().json().catch(() => null) as { error?: unknown } | null;
+          const contentConflict = response.status === 409 && typeof responseError?.error === "string" && responseError.error.includes("autre contenu");
+          if (response.status === 401) {
+            await updatePendingJournal((entries) => entries.map((entry) => entry.id === mutationId ? { ...entry, status: "auth_required", error: "Connexion requise" } : entry)); setAccess("denied"); setMutationNotice("Action en attente de reconnexion"); throw new Error("auth");
+          }
+          if (response.status === 429) {
+            const retryAfter = response.headers.get("retry-after"); const seconds = retryAfter ? Number(retryAfter) : NaN; const date = retryAfter ? Date.parse(retryAfter) : NaN;
+            const delay = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : Number.isFinite(date) && date > Date.now() ? date - Date.now() : 5_000;
+            const current = loadPendingListMutations(window.localStorage).find((entry) => entry.id === mutationId); const retryCount = (current?.retryCount ?? 0) + (resumed ? 1 : 0);
+            const retryEntry = current && { ...current, status: "rate_limited" as const, nextAttemptAt: Date.now() + Math.min(delay, 60_000), retryCount, error: retryCount >= 3 ? "Limitation persistante — réessayez plus tard" : "Limitation temporaire" };
+            await updatePendingJournal((entries) => entries.map((entry) => entry.id === mutationId && retryEntry ? retryEntry : entry)); setMutationNotice(retryCount >= 3 ? "Action en attente de votre confirmation" : "Action reportée temporairement");
+            if (retryEntry) scheduleRetry(retryEntry);
+            throw new Error("rate");
+          }
+          if ((response.status >= 400 && response.status < 500 && response.status !== 409) || contentConflict) {
+            const error = typeof responseError?.error === "string" ? responseError.error : "Action refusée";
+            try { await updatePendingJournal((entries) => entries.map((entry) => entry.id === mutationId ? { ...entry, status: "rejected", error } : entry)); } catch {}
+            setSyncState("error"); setMutationNotice(`Action non appliquée : ${error}`);
+            return null;
+          }
+          throw new Error("sync");
+        }
+        const data = await response.json() as { lists: ShoppingList[] };
+        cancelScheduledRetry(mutationId);
+        retryMutationIds.current.delete(actionKey);
+        try { await updatePendingJournal((entries) => entries.filter((entry) => entry.id !== mutationId)); } catch { setSyncState("error"); }
+        setLists(data.lists); setSyncState("synced"); return data.lists;
+      } catch (error) {
+        if (!(error instanceof Error) || (error.message !== "rate" && error.message !== "auth")) try { await updatePendingJournal((entries) => entries.map((entry) => entry.id === mutationId ? { ...entry, status: "uncertain" } : entry)); } catch {}
+        setSyncState("error"); return null;
+      }
+      finally { mutationInFlight.current -= 1; }
+    };
+    return mutationQueue.current.enqueue(() => withPendingListMutationLock(mutationId, perform));
+  }, [cancelScheduledRetry, scheduleRetry, updatePendingJournal]);
+
+  useEffect(() => {
+    mutateRef.current = mutate;
+  }, [mutate]);
+
+  useEffect(() => {
+    if (access !== "granted") return;
+    let loaded;
+    try { loaded = readPendingListMutations(window.localStorage); pendingMutations.current = loaded.entries; }
+    catch { queueMicrotask(() => { setSyncState("error"); setMutationNotice("Journal local indisponible : aucune reprise automatique"); }); return; }
+    const expired = loaded.expired.find((entry) => entry.status === "uncertain" || entry.status === "pending");
+    if (expired) queueMicrotask(() => setMutationNotice(`Action expirée : résultat inconnu pour ${JSON.stringify(expired.action)}. Vérifiez la liste avant de décider de la refaire.`));
+    const rejected = pendingMutations.current.find((entry) => entry.status === "rejected");
+    if (rejected) queueMicrotask(() => setMutationNotice(`Action non appliquée : ${rejected.error ?? "Action refusée"}`));
+    for (const entry of pendingMutations.current) {
+      if (entry.status === "rejected") continue;
+      if (entry.status === "rate_limited" && (entry.retryCount ?? 0) >= 3) continue;
+      if (entry.status === "rate_limited" && (entry.nextAttemptAt ?? 0) > Date.now()) {
+        scheduleRetry(entry);
+        continue;
+      }
+      void mutateRef.current?.(entry.action, entry);
+    }
+  }, [access, scheduleRetry]);
+
+  useEffect(() => {
+    if (access !== "granted") return;
+    if (!supportsPendingMutationLocks()) {
+      queueMicrotask(() => setMutationNotice("Ce navigateur ne coordonne pas les reprises entre onglets"));
+      return;
+    }
+    const synchronize = () => {
+      try { pendingMutations.current = readPendingListMutations(window.localStorage).entries; }
+      catch { setSyncState("error"); setMutationNotice("Journal local indisponible : aucune reprise automatique"); return; }
+      for (const entry of pendingMutations.current) {
+        if (entry.status === "rejected") {
+          setMutationNotice(`Action non appliquée : ${entry.error ?? "Action refusée"}`);
+        } else if (entry.status === "rate_limited") {
+          if ((entry.retryCount ?? 0) < 3 && (entry.nextAttemptAt ?? 0) > currentTimestamp()) scheduleRetry(entry);
+        } else if (entry.status !== "auth_required") {
+          void mutateRef.current?.(entry.action, entry);
+        }
+      }
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.storageArea === window.localStorage && event.key === "supervie-pending-list-mutations") synchronize();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [access, scheduleRetry]);
 
   const currentList = lists.find((list) => list.id === currentListId) ?? lists[0];
   const items = currentList?.items ?? [];
@@ -1353,7 +1561,21 @@ export default function Home() {
 
   async function toggle(id: number) {
     const item = items.find((entry) => entry.id === id);
-    if (item) await mutate({ action: "toggleItem", id, checked: !item.checked });
+    if (!item) return;
+    const checked = pendingChecked.current.get(id) ?? item.checked;
+    const nextChecked = !checked;
+    pendingChecked.current.set(id, nextChecked);
+    setLists((current) => current.map((list) => ({
+      ...list,
+      items: list.items.map((entry) => entry.id === id ? { ...entry, checked: nextChecked } : entry),
+    })));
+    const updated = await mutate({ action: "toggleItem", id, checked: nextChecked });
+    if (updated && pendingChecked.current.get(id) === nextChecked) {
+      pendingChecked.current.delete(id);
+    } else if (!updated) {
+      pendingChecked.current.delete(id);
+      void loadLists(true);
+    }
   }
 
   async function addItems(event: FormEvent) {
@@ -1459,7 +1681,7 @@ export default function Home() {
             <button className="primary-action" onClick={() => setShowAdd(true)}>+ Ajouter un article</button>
             <button onClick={clearChecked}>Effacer cochés</button>
           </div>
-          <p className={`sync-line ${syncState}`}><span /> {syncState === "loading" ? "Synchronisation…" : syncState === "error" ? "Hors connexion — réessayer" : "Synchronisé"}</p>
+          <p className={`sync-line ${syncState}`}><span /> {mutationNotice || (syncState === "loading" ? "Synchronisation…" : syncState === "error" ? "Hors connexion — réessayer" : "Synchronisé")}</p>
           <AppNav active="lists" settings={epaperSettings} onChange={setVisibleView} />
         </footer>
 
@@ -1475,6 +1697,9 @@ export default function Home() {
                 autoFocus
                 placeholder={"Tomates\nLait\nCouches"}
               />
+              {mutationNotice.startsWith("Action non appliquée") && <p role="alert" className="access-error">{mutationNotice}</p>}
+              {(mutationNotice.startsWith("Action reportée") || mutationNotice.startsWith("Action en attente")) && <p role="status" className="access-error">{mutationNotice}</p>}
+              {(mutationNotice.startsWith("Enregistrement local indisponible") || mutationNotice.startsWith("Reprise multi-onglets indisponible")) && <p role="alert" className="access-error">{mutationNotice}</p>}
               <div className="panel-actions">
                 <button type="button" onClick={() => setShowAdd(false)}>Annuler</button>
                 <button type="submit" className="inverted">Ajouter la liste</button>

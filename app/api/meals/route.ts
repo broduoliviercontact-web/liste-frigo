@@ -2,8 +2,7 @@ import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { mealPlans } from "../../../db/schema";
 import { requireSupervieAccess } from "../../access";
-
-type MealMoment = "midi" | "soir";
+import { isJsonRecord, isoDate, text } from "../input-validation";
 
 function parisDate(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -79,11 +78,12 @@ export async function POST(request: Request) {
     const denied = await requireSupervieAccess(request);
     if (denied) return denied;
     await ensureMealSchema();
-    const body = await request.json() as { date?: string; moment?: MealMoment; label?: string };
-    const date = body.date ?? "";
+    const body: unknown = await request.json().catch(() => null);
+    if (!isJsonRecord(body)) return Response.json({ error: "Données invalides" }, { status: 400 });
+    const date = isoDate(body.date);
     const moment = body.moment;
-    const label = body.label?.trim() ?? "";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || (moment !== "midi" && moment !== "soir")) {
+    const label = text(body.label, 100);
+    if (!date || (moment !== "midi" && moment !== "soir") || label === null) {
       return Response.json({ error: "Créneau invalide" }, { status: 400 });
     }
 

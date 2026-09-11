@@ -2,8 +2,8 @@ import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { agendaEvents } from "../../../db/schema";
 import { requireSupervieAccess } from "../../access";
+import { agendaTime, boundedDuration, isJsonRecord, isoDate, positiveInteger, text } from "../input-validation";
 
-type AgendaAction = "create" | "update" | "delete" | "setLayout";
 type AgendaCategory = "famille" | "creche" | "sante" | "maison" | "travail";
 type AgendaLayout = "horizontal" | "vertical";
 
@@ -35,26 +35,8 @@ function dateFromMonday(monday: string, index: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function cleanTitle(value?: string) {
-  return value?.trim().replace(/\s+/g, " ").slice(0, 80) ?? "";
-}
-
-function cleanTime(value?: string | null) {
-  const time = value?.trim() ?? "";
-  return /^\d{2}:\d{2}$/.test(time) ? time : null;
-}
-
-function cleanCategory(value?: string) {
-  return agendaCategories.has(value as AgendaCategory) ? value as AgendaCategory : "famille";
-}
-
-function cleanDuration(value?: number | null) {
-  if (!value || !Number.isFinite(value)) return null;
-  return Math.min(720, Math.max(15, Math.round(value / 15) * 15));
-}
-
-function cleanLayout(value?: string) {
-  return agendaLayouts.has(value as AgendaLayout) ? value as AgendaLayout : "horizontal";
+function cleanLayout(value: unknown) {
+  return typeof value === "string" && agendaLayouts.has(value as AgendaLayout) ? value as AgendaLayout : null;
 }
 
 async function ensureAgendaSchema() {
@@ -81,7 +63,7 @@ async function readAgendaLayout() {
   await ensureAgendaSchema();
   const { env } = await import("cloudflare:workers");
   const row = await env.DB.prepare("SELECT value FROM app_settings WHERE key = ?").bind("agenda_layout").first<{ value?: string }>();
-  return cleanLayout(row?.value);
+  return cleanLayout(row?.value) ?? "horizontal";
 }
 
 async function writeAgendaLayout(layout: AgendaLayout) {
@@ -148,46 +130,47 @@ export async function POST(request: Request) {
   try {
     const denied = await requireSupervieAccess(request);
     if (denied) return denied;
-    const body = await request.json() as {
-      action?: AgendaAction;
-      id?: number;
-      date?: string;
-      time?: string | null;
-      title?: string;
-      category?: string;
-      durationMinutes?: number | null;
-      layout?: string;
-    };
+    const body: unknown = await request.json().catch(() => null);
+    if (!isJsonRecord(body) || typeof body.action !== "string") return Response.json({ error: "Action invalide" }, { status: 400 });
     const db = await getDb();
 
     if (body.action === "setLayout") {
-      await writeAgendaLayout(cleanLayout(body.layout));
+      const layout = cleanLayout(body.layout);
+      if (!layout) return Response.json({ error: "Disposition invalide" }, { status: 400 });
+      await writeAgendaLayout(layout);
       return Response.json(await readWeekAgenda());
     }
 
     if (body.action === "delete") {
-      if (!body.id) return Response.json({ error: "Evenement introuvable" }, { status: 400 });
-      await db.delete(agendaEvents).where(eq(agendaEvents.id, body.id));
+      const id = positiveInteger(body.id);
+      if (!id) return Response.json({ error: "Evenement introuvable" }, { status: 400 });
+      await db.delete(agendaEvents).where(eq(agendaEvents.id, id));
       return Response.json(await readWeekAgenda());
     }
 
-    const date = body.date ?? "";
-    const title = cleanTitle(body.title);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !title) {
+    if (body.action !== "create" && body.action !== "update") return Response.json({ error: "Action invalide" }, { status: 400 });
+
+    const date = isoDate(body.date);
+    const title = text(body.title, 80);
+    const time = agendaTime(body.time);
+    const durationMinutes = boundedDuration(body.durationMinutes);
+    const category = typeof body.category === "string" && agendaCategories.has(body.category as AgendaCategory) ? body.category as AgendaCategory : null;
+    if (!date || !title || time === undefined || durationMinutes === undefined || !category) {
       return Response.json({ error: "Evenement incomplet" }, { status: 400 });
     }
     const values = {
       date,
-      time: cleanTime(body.time),
+      time,
       title,
-      category: cleanCategory(body.category),
-      durationMinutes: cleanDuration(body.durationMinutes),
+      category,
+      durationMinutes,
       updatedAt: new Date(),
     };
 
     if (body.action === "update") {
-      if (!body.id) return Response.json({ error: "Evenement introuvable" }, { status: 400 });
-      await db.update(agendaEvents).set(values).where(eq(agendaEvents.id, body.id));
+      const id = positiveInteger(body.id);
+      if (!id) return Response.json({ error: "Evenement introuvable" }, { status: 400 });
+      await db.update(agendaEvents).set(values).where(eq(agendaEvents.id, id));
     } else {
       await db.insert(agendaEvents).values({ ...values, createdAt: new Date() });
     }
