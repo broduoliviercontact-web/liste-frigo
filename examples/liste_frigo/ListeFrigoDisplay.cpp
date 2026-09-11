@@ -986,10 +986,45 @@ void ListeFrigoDisplay::drawBoatsPage()
     fillRect(32, 122, LOGICAL_WIDTH - 64, 4, BLACK);
 
     if (!boats_state.available || boats_state.boat_count <= 0) {
-        drawBoatIcon(LOGICAL_WIDTH / 2, 330, BLACK, 3);
-        drawCenteredText(440, "Aucun passage", 5, BLACK);
-        drawCenteredText(492, "detecte", 5, BLACK);
-        drawCenteredText(590, boats_state.degraded ? "Flux AIS indisponible" : "Surveillance active", 2, DARK);
+        constexpr int32_t canal_left = 52;
+        constexpr int32_t canal_right = LOGICAL_WIDTH - 52;
+        constexpr int32_t canal_y = 308;
+        constexpr int32_t la_villette_x = 66;
+        constexpr int32_t pantin_x = 162;
+        constexpr int32_t home_x = 278;
+        constexpr int32_t bobigny_x = 390;
+        constexpr int32_t bondy_x = 474;
+
+        drawText(canal_left, 164, "PARIS", 2, BLACK);
+        drawText(canal_right - textWidth("BONDY", 2), 164, "BONDY", 2, BLACK);
+        drawText(canal_left, 202, "CANAL DE L'OURCQ", 2, DARK);
+        drawText(canal_right - textWidth("8 KM", 2), 202, "8 KM", 2, DARK);
+
+        // Deux rives et un courant pointille rendent le canal lisible meme sans bateau.
+        drawIconLine(canal_left, canal_y - 9, canal_right, canal_y - 9, BLACK, 2);
+        drawIconLine(canal_left, canal_y + 9, canal_right, canal_y + 9, BLACK, 2);
+        drawIconDashedLine(canal_left + 8, canal_y, canal_right - 8, canal_y, DARK, 1, 7, 7);
+        drawIconLine(canal_left, canal_y - 18, canal_left, canal_y + 18, BLACK, 2);
+        drawIconLine(canal_right, canal_y - 18, canal_right, canal_y + 18, BLACK, 2);
+
+        const int32_t stops[] = {la_villette_x, pantin_x, home_x, bobigny_x, bondy_x};
+        for (int8_t i = 0; i < 5; ++i) {
+            drawIconLine(stops[i], canal_y + 20, stops[i], canal_y + 42, BLACK, 2);
+        }
+        drawIconFilledCircle(home_x, canal_y, 8, BLACK, 1);
+        drawText(home_x - textWidth("CHEZ NOUS", 2) / 2, canal_y - 50, "CHEZ NOUS", 2, BLACK);
+
+        drawText(42, 370, "LA VILLETTE", 2, BLACK);
+        drawText(132, 408, "PANTIN", 2, BLACK);
+        drawText(home_x - textWidth("R. QUENEAU", 2) / 2, 370, "R. QUENEAU", 2, BLACK);
+        drawText(362, 408, "BOBIGNY", 2, BLACK);
+        drawText(446, 370, "BONDY", 2, BLACK);
+
+        fillRect(52, 470, LOGICAL_WIDTH - 104, 2, DARK);
+        drawCenteredText(524, "Aucun bateau", 4, BLACK);
+        drawCenteredText(568, "dans la zone", 4, BLACK);
+        drawCenteredText(636, boats_state.degraded ? "Flux AIS indisponible" : "Surveillance active", 2, DARK);
+        drawCenteredText(682, "Prochain releve automatique", 2, DARK);
         drawPrimaryNavBar(TAB_BOATS);
         return;
     }
