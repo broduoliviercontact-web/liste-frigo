@@ -6,8 +6,8 @@
 constexpr int32_t LOGICAL_WIDTH = EPD_HEIGHT;   // 540
 constexpr int32_t LOGICAL_HEIGHT = EPD_WIDTH;   // 960
 constexpr size_t FRAMEBUFFER_BYTES = EPD_WIDTH * EPD_HEIGHT / 2;
-constexpr int8_t NAV_TAB_COUNT = 9;
-constexpr int8_t NAV_VISIBLE_TAB_MAX = 8;
+constexpr int8_t NAV_TAB_COUNT = 10;
+constexpr int8_t NAV_VISIBLE_TAB_MAX = 9;
 constexpr int32_t NAV_LEFT = 32;
 constexpr int32_t NAV_TOP = 850;
 constexpr int32_t NAV_WIDTH = LOGICAL_WIDTH - (NAV_LEFT * 2);
@@ -42,6 +42,8 @@ constexpr int8_t AGENDA_DAY_ITEM_MAX = 2;
 constexpr int8_t AGENDA_LABEL_MAX = 40;
 constexpr int8_t AGENDA_TIME_MAX = 6;
 constexpr int8_t AGENDA_CATEGORY_MAX = 12;
+constexpr int8_t BOAT_COUNT = 5;
+constexpr int8_t BOAT_NAME_MAX = 28;
 
 enum NavTabId : int8_t {
     TAB_LISTES = 0,
@@ -53,6 +55,7 @@ enum NavTabId : int8_t {
     TAB_ISS = 6,
     TAB_AIR = 7,
     TAB_AGENDA = 8,
+    TAB_BOATS = 9,
     TAB_NONE = -1,
 };
 
@@ -226,6 +229,28 @@ struct AgendaState {
     int8_t day_count;
 };
 
+enum BoatDirection : int8_t {
+    BOAT_DIRECTION_UNKNOWN,
+    BOAT_DIRECTION_PARIS,
+    BOAT_DIRECTION_BOBIGNY,
+};
+
+struct Boat {
+    char name[BOAT_NAME_MAX];
+    uint16_t distance_tenths_km;
+    uint16_t speed_tenths_kmh;
+    int16_t eta_minutes;
+    BoatDirection direction;
+};
+
+struct BoatsState {
+    bool available;
+    bool degraded;
+    char updated_at[WEATHER_UPDATED_AT_MAX];
+    Boat boats[BOAT_COUNT];
+    int8_t boat_count;
+};
+
 struct TouchEvent {
     int16_t physical_x;
     int16_t physical_y;
@@ -273,6 +298,8 @@ inline const char *navAsciiName(NavTabId tab)
         return "Air";
     case TAB_AGENDA:
         return "Agenda";
+    case TAB_BOATS:
+        return "Boat";
     default:
         return "aucun";
     }
@@ -299,6 +326,8 @@ inline const char *navSerialName(NavTabId tab)
         return "Air";
     case TAB_AGENDA:
         return "Agenda";
+    case TAB_BOATS:
+        return "Bateaux";
     default:
         return "aucun";
     }
@@ -325,6 +354,8 @@ inline const char *navPageTitle(NavTabId tab)
         return "AIR";
     case TAB_AGENDA:
         return "AGENDA";
+    case TAB_BOATS:
+        return "BATEAUX";
     default:
         return "LISTES";
     }
@@ -351,6 +382,8 @@ inline const char *navApiKey(NavTabId tab)
         return "air";
     case TAB_AGENDA:
         return "agenda";
+    case TAB_BOATS:
+        return "bateaux";
     default:
         return "listes";
     }
@@ -368,5 +401,6 @@ inline NavTabId navTabFromApiKey(const char *key)
     if (strcmp(key, "iss") == 0) return TAB_ISS;
     if (strcmp(key, "air") == 0 || strcmp(key, "traffic-aerien") == 0) return TAB_AIR;
     if (strcmp(key, "agenda") == 0 || strcmp(key, "calendrier") == 0) return TAB_AGENDA;
+    if (strcmp(key, "bateaux") == 0 || strcmp(key, "boats") == 0) return TAB_BOATS;
     return TAB_NONE;
 }

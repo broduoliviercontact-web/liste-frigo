@@ -17,6 +17,7 @@ public:
     void setIssState(const IssState &state);
     void setAirState(const AirState &state);
     void setAgendaState(const AgendaState &state);
+    void setBoatsState(const BoatsState &state);
     void setSelectedAircraft(int8_t index);
     void updateKeyboardValue(const char *value);
     void updateListItemToggle(int8_t visible_row, const ListPageState &list_state);
@@ -42,6 +43,7 @@ private:
     IssState iss_state = {};
     AirState air_state = {};
     AgendaState agenda_state = {};
+    BoatsState boats_state = {};
     int8_t selected_aircraft = -1;
 
     void drawPage(NavTabId tab, const ListPageState *list_state);
@@ -55,6 +57,7 @@ private:
     void drawIssPage();
     void drawAirPage();
     void drawAgendaPage();
+    void drawBoatsPage();
     void drawAirRadar();
     void drawAirDetails(const Aircraft &plane);
     void drawListPickerPage(const ListPageState &list_state);
@@ -94,6 +97,8 @@ private:
     void drawIssNavIcon(int32_t x, int32_t y, uint8_t gray);
     void drawAirNavIcon(int32_t x, int32_t y, uint8_t gray);
     void drawAgendaNavIcon(int32_t x, int32_t y, uint8_t gray);
+    void drawBoatNavIcon(int32_t x, int32_t y, uint8_t gray);
+    void drawBoatIcon(int32_t center_x, int32_t center_y, uint8_t gray, int32_t scale = 1);
     void drawRadarPlane(int32_t x, int32_t y, int16_t heading, uint8_t gray);
     void drawWorldMapMini(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t gray);
     void drawIssTrack(const IssTrackPoint *track, int8_t track_count, int32_t map_x, int32_t map_y, int32_t map_w, int32_t map_h, uint8_t gray, int32_t scale, bool dashed);

@@ -264,6 +264,8 @@ void fetchTask(void *param)
         bool has_iss_state = false;
         AirState fetched_air = {};
         bool has_air_state = false;
+        BoatsState fetched_boats = {};
+        bool has_boats_state = false;
         AgendaState fetched_agenda = {};
         bool has_agenda_state = false;
         const bool is_write_request = kind == ListeFrigoApi::REQUEST_TOGGLE_ITEM ||
@@ -583,6 +585,28 @@ void fetchTask(void *param)
                         has_air_state = fetched_air.aircraft_count > 0;
                     }
 
+                    JsonObject boats = doc["pages"]["bateaux"].as<JsonObject>();
+                    if (!boats.isNull()) {
+                        const char *status = boats["status"] | "degraded";
+                        fetched_boats.degraded = strcmp(status, "degraded") == 0;
+                        strlcpy(fetched_boats.updated_at, boats["updatedAt"] | "", sizeof(fetched_boats.updated_at));
+                        for (JsonObject boat : boats["boats"].as<JsonArray>()) {
+                            if (fetched_boats.boat_count >= BOAT_COUNT) break;
+                            Boat &target = fetched_boats.boats[fetched_boats.boat_count++];
+                            copyEpaperText(target.name, sizeof(target.name), boat["name"] | "Bateau", "Bateau");
+                            const float distance_km = max(0.0f, boat["distanceKm"] | 0.0f);
+                            const float speed_kmh = max(0.0f, boat["speedKmh"] | 0.0f);
+                            target.distance_tenths_km = constrain(static_cast<int>(roundf(distance_km * 10.0f)), 0, 65535);
+                            target.speed_tenths_kmh = constrain(static_cast<int>(roundf(speed_kmh * 10.0f)), 0, 65535);
+                            target.eta_minutes = boat["etaMinutes"].isNull() ? -1 : constrain(boat["etaMinutes"].as<int>(), 0, 32767);
+                            const char *direction = boat["direction"] | "INDETERMINE";
+                            target.direction = strcmp(direction, "PARIS") == 0 ? BOAT_DIRECTION_PARIS :
+                                               strcmp(direction, "BOBIGNY") == 0 ? BOAT_DIRECTION_BOBIGNY : BOAT_DIRECTION_UNKNOWN;
+                        }
+                        fetched_boats.available = fetched_boats.boat_count > 0;
+                        has_boats_state = true;
+                    }
+
                     success = true;
                     snprintf(message, sizeof(message), "JSON OK");
                 }
@@ -607,7 +631,8 @@ void fetchTask(void *param)
                                 has_settings ? &fetched_settings : nullptr,
                                 has_iss_state ? &fetched_iss : nullptr,
                                 has_air_state ? &fetched_air : nullptr,
-                                has_agenda_state ? &fetched_agenda : nullptr);
+                                has_agenda_state ? &fetched_agenda : nullptr,
+                                has_boats_state ? &fetched_boats : nullptr);
         }
     }
 }
@@ -760,6 +785,14 @@ bool ListeFrigoApi::takeAgendaState(AgendaState &target)
     return true;
 }
 
+bool ListeFrigoApi::takeBoatsState(BoatsState &target)
+{
+    if (!boats_state_available) return false;
+    target = result_boats_state;
+    boats_state_available = false;
+    return true;
+}
+
 bool ListeFrigoApi::getCachedListState(int32_t list_id, ListPageState &target) const
 {
     for (int8_t i = 0; i < cached_list_count; ++i) {
@@ -864,7 +897,7 @@ void ListeFrigoApi::finishFetch(bool success, int http_code, size_t bytes, const
                                 const WeatherState *weather_state, const MealWeekState *meal_week_state,
                                 const MetroState *metro_state, const EpaperSettings *settings,
                                 const IssState *iss_state, const AirState *air_state,
-                                const AgendaState *agenda_state)
+                                const AgendaState *agenda_state, const BoatsState *boats_state)
 {
     result_http_code = http_code;
     result_bytes = bytes;
@@ -889,6 +922,8 @@ void ListeFrigoApi::finishFetch(bool success, int http_code, size_t bytes, const
     if (air_state_available) result_air_state = *air_state;
     agenda_state_available = success && agenda_state != nullptr;
     if (agenda_state_available) result_agenda_state = *agenda_state;
+    boats_state_available = success && boats_state != nullptr;
+    if (boats_state_available) result_boats_state = *boats_state;
     result_has_list_state = success && list_state != nullptr;
     if (result_has_list_state) {
         result_list_state = *list_state;

@@ -162,6 +162,6 @@ NavTabId ListeFrigoTouch::detectNavTab(int16_t logical_x, int16_t logical_y)
     }
     if (index < 0) return TAB_NONE;
 
-    static const NavTabId tabs[] = {TAB_LISTES, TAB_CRECHE, TAB_METEO, TAB_REPAS, TAB_METRO, TAB_AGENDA, TAB_ISS, TAB_AIR};
+    static const NavTabId tabs[] = {TAB_LISTES, TAB_CRECHE, TAB_METEO, TAB_REPAS, TAB_METRO, TAB_AGENDA, TAB_ISS, TAB_AIR, TAB_BOATS};
     return tabs[index];
 }

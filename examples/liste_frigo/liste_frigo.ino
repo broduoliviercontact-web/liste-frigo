@@ -122,11 +122,12 @@ ListPageState list_state = {
 WeatherState weather_state = {};
 MealWeekState meal_week_state = {};
 MetroState metro_state = {};
-EpaperSettings epaper_settings = {{TAB_LISTES, TAB_CRECHE, TAB_METEO, TAB_REPAS, TAB_METRO, TAB_AGENDA, TAB_ISS, TAB_AIR}, NAV_VISIBLE_TAB_MAX, TAB_AGENDA, false, 120};
+EpaperSettings epaper_settings = {{TAB_LISTES, TAB_CRECHE, TAB_METEO, TAB_REPAS, TAB_METRO, TAB_AGENDA, TAB_ISS, TAB_AIR, TAB_BOATS}, NAV_VISIBLE_TAB_MAX, TAB_AGENDA, false, 120};
 bool epaper_settings_received = false;
 IssState iss_state = {};
 AirState air_state = {};
 AgendaState agenda_state = {};
+BoatsState boats_state = {};
 int8_t selected_aircraft_index = -1;
 uint32_t last_carousel_ms = 0;
 
@@ -435,6 +436,19 @@ bool sameAgendaState(const AgendaState &a, const AgendaState &b)
     return true;
 }
 
+bool sameBoatsState(const BoatsState &a, const BoatsState &b)
+{
+    if (a.available != b.available || a.degraded != b.degraded || a.boat_count != b.boat_count) return false;
+    for (int8_t i = 0; i < a.boat_count; ++i) {
+        const Boat &left = a.boats[i];
+        const Boat &right = b.boats[i];
+        if (strcmp(left.name, right.name) != 0 || left.distance_tenths_km != right.distance_tenths_km ||
+            left.speed_tenths_kmh != right.speed_tenths_kmh || left.eta_minutes != right.eta_minutes ||
+            left.direction != right.direction) return false;
+    }
+    return true;
+}
+
 bool isVisibleTab(NavTabId tab)
 {
     for (int8_t i = 0; i < epaper_settings.visible_tab_count && i < NAV_VISIBLE_TAB_MAX; ++i) {
@@ -576,6 +590,17 @@ void applyApiListState()
         Serial.printf("AGENDA: recu jours=%d evenements=%u\n", agenda_state.day_count, agenda_state.event_count);
         if (agenda_changed && active_tab == TAB_AGENDA) {
             requestPageDisplay(TAB_AGENDA, list_state, "agenda actualise");
+        }
+    }
+
+    BoatsState remote_boats = {};
+    if (api.takeBoatsState(remote_boats)) {
+        const bool boats_changed = !sameBoatsState(boats_state, remote_boats);
+        boats_state = remote_boats;
+        display.setBoatsState(boats_state);
+        Serial.printf("BATEAUX: recus=%d statut=%s\n", boats_state.boat_count, boats_state.degraded ? "degrade" : "ok");
+        if (boats_changed && active_tab == TAB_BOATS) {
+            requestPageDisplay(TAB_BOATS, list_state, "bateaux actualises");
         }
     }
 
@@ -1222,6 +1247,7 @@ void setup()
     display.setEpaperSettings(epaper_settings);
     display.setIssState(iss_state);
     display.setAirState(air_state);
+    display.setBoatsState(boats_state);
     if (xTaskCreatePinnedToCore(displayTask, "display_deferred", 8192, nullptr, 1, &display_task, 0) != pdPASS) {
         Serial.println("Liste Frigo: erreur creation tache affichage differe");
         while (true) {

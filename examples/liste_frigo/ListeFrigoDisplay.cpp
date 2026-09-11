@@ -23,6 +23,7 @@ constexpr NavTabId DEFAULT_VISIBLE_TABS[NAV_VISIBLE_TAB_MAX] = {
     TAB_AGENDA,
     TAB_ISS,
     TAB_AIR,
+    TAB_BOATS,
 };
 
 const char *AGENDA_DAY_LABELS[AGENDA_DAY_COUNT] = {"LUN", "MAR", "MER", "JEU", "VEN", "SAM", "DIM"};
@@ -250,6 +251,11 @@ void ListeFrigoDisplay::setAgendaState(const AgendaState &state)
     agenda_state = state;
 }
 
+void ListeFrigoDisplay::setBoatsState(const BoatsState &state)
+{
+    boats_state = state;
+}
+
 void ListeFrigoDisplay::setSelectedAircraft(int8_t index)
 {
     selected_aircraft = index >= 0 && index < air_state.aircraft_count ? index : -1;
@@ -397,6 +403,10 @@ void ListeFrigoDisplay::drawPage(NavTabId tab, const ListPageState *list_state)
     }
     if (tab == TAB_AIR) {
         drawAirPage();
+        return;
+    }
+    if (tab == TAB_BOATS) {
+        drawBoatsPage();
         return;
     }
 
@@ -969,6 +979,72 @@ void ListeFrigoDisplay::drawAirPage()
     drawPrimaryNavBar(TAB_AIR);
 }
 
+void ListeFrigoDisplay::drawBoatsPage()
+{
+    drawText(52, 34, "BATEAUX", 5, BLACK);
+    drawText(52, 82, "CANAL DE L'OURCQ", 3, DARK);
+    fillRect(32, 122, LOGICAL_WIDTH - 64, 4, BLACK);
+
+    if (!boats_state.available || boats_state.boat_count <= 0) {
+        drawBoatIcon(LOGICAL_WIDTH / 2, 330, BLACK, 3);
+        drawCenteredText(440, "Aucun passage", 5, BLACK);
+        drawCenteredText(492, "detecte", 5, BLACK);
+        drawCenteredText(590, boats_state.degraded ? "Flux AIS indisponible" : "Surveillance active", 2, DARK);
+        drawPrimaryNavBar(TAB_BOATS);
+        return;
+    }
+
+    const Boat &next = boats_state.boats[0];
+    drawText(52, 160, "PROCHAIN PASSAGE", 2, DARK);
+    drawBoatIcon(82, 224, BLACK, 2);
+    drawTextLimited(126, 202, next.name, 5, BLACK, 350);
+
+    constexpr int32_t line_left = 96;
+    constexpr int32_t line_right = 444;
+    constexpr int32_t home_x = (line_left + line_right) / 2;
+    constexpr int32_t line_y = 350;
+    drawText(34, line_y - 10, "PARIS", 2, BLACK);
+    drawText(452, line_y - 10, "BOB", 2, BLACK);
+    drawIconLine(line_left, line_y, line_right, line_y, BLACK, 2);
+    drawIconLine(line_left, line_y, line_left + 14, line_y - 9, BLACK, 2);
+    drawIconLine(line_left, line_y, line_left + 14, line_y + 9, BLACK, 2);
+    drawIconLine(line_right, line_y, line_right - 14, line_y - 9, BLACK, 2);
+    drawIconLine(line_right, line_y, line_right - 14, line_y + 9, BLACK, 2);
+    drawIconFilledCircle(home_x, line_y, 8, BLACK, 1);
+    drawCenteredText(line_y + 28, "CHEZ NOUS", 2, DARK);
+
+    const int32_t offset = min<int32_t>(145, next.distance_tenths_km * 5);
+    int32_t boat_x = home_x;
+    if (next.direction == BOAT_DIRECTION_PARIS) boat_x += offset;
+    else if (next.direction == BOAT_DIRECTION_BOBIGNY) boat_x -= offset;
+    drawBoatIcon(boat_x, line_y - 48, BLACK, 2);
+
+    const char *direction = next.direction == BOAT_DIRECTION_PARIS ? "vers Paris" :
+                            next.direction == BOAT_DIRECTION_BOBIGNY ? "vers Bobigny" : "sens indetermine";
+    drawCenteredText(446, direction, 4, BLACK);
+    char distance[24] = {0};
+    snprintf(distance, sizeof(distance), "%u.%u km", next.distance_tenths_km / 10, next.distance_tenths_km % 10);
+    drawCenteredText(500, distance, 5, BLACK);
+    char eta[24] = {0};
+    if (next.eta_minutes >= 0) snprintf(eta, sizeof(eta), "~%d min", next.eta_minutes);
+    else strlcpy(eta, "ETA inconnue", sizeof(eta));
+    drawCenteredText(558, eta, 5, BLACK);
+
+    drawText(52, 646, "PROCHAINS BATEAUX", 2, DARK);
+    fillRect(52, 674, 436, 2, BLACK);
+    for (int8_t i = 1; i < boats_state.boat_count && i < 4; ++i) {
+        const Boat &boat = boats_state.boats[i];
+        const int32_t y = 690 + (i - 1) * 42;
+        drawTextLimited(52, y, boat.name, 3, BLACK, 300);
+        char timing[20] = {0};
+        if (boat.eta_minutes >= 0) snprintf(timing, sizeof(timing), "~%d min", boat.eta_minutes);
+        else snprintf(timing, sizeof(timing), "%u.%u km", boat.distance_tenths_km / 10, boat.distance_tenths_km % 10);
+        drawText(488 - textWidth(timing, 3), y, timing, 3, BLACK);
+    }
+    drawText(52, 815, boats_state.degraded ? "AIS degrade" : "Donnees synchronisees", 2, DARK);
+    drawPrimaryNavBar(TAB_BOATS);
+}
+
 void ListeFrigoDisplay::drawAirRadar()
 {
     fillRect(AIR_RADAR_AREA.x, AIR_RADAR_AREA.y, AIR_RADAR_AREA.width, AIR_RADAR_AREA.height, WHITE);
@@ -1509,6 +1585,8 @@ void ListeFrigoDisplay::drawPrimaryNavBar(NavTabId selected_tab)
             drawIssNavIcon(center - 15, icon_top, ink);
         } else if (tabs[index] == TAB_AIR) {
             drawAirNavIcon(center - 15, icon_top, ink);
+        } else if (tabs[index] == TAB_BOATS) {
+            drawBoatNavIcon(center - 15, icon_top, ink);
         } else {
             drawAgendaNavIcon(center - 15, icon_top, ink);
         }
@@ -1581,6 +1659,22 @@ void ListeFrigoDisplay::drawAirNavIcon(int32_t x, int32_t y, uint8_t gray)
     drawIconCircle(x + 15, y + 15, 13, gray, 1);
     drawIconCircle(x + 15, y + 15, 7, gray, 1);
     drawRadarPlane(x + 15, y + 15, 45, gray);
+}
+
+void ListeFrigoDisplay::drawBoatNavIcon(int32_t x, int32_t y, uint8_t gray)
+{
+    drawBoatIcon(x + 15, y + 15, gray, 1);
+}
+
+void ListeFrigoDisplay::drawBoatIcon(int32_t center_x, int32_t center_y, uint8_t gray, int32_t scale)
+{
+    const int32_t half = 12 * scale;
+    drawIconLine(center_x - half, center_y, center_x + half, center_y, gray, scale);
+    drawIconLine(center_x - half, center_y, center_x - 7 * scale, center_y + 7 * scale, gray, scale);
+    drawIconLine(center_x - 7 * scale, center_y + 7 * scale, center_x + 7 * scale, center_y + 7 * scale, gray, scale);
+    drawIconLine(center_x + 7 * scale, center_y + 7 * scale, center_x + half, center_y, gray, scale);
+    fillRect(center_x - 6 * scale, center_y - 7 * scale, 12 * scale, 7 * scale, gray);
+    fillRect(center_x - scale, center_y - 14 * scale, 2 * scale, 7 * scale, gray);
 }
 
 void ListeFrigoDisplay::drawAgendaNavIcon(int32_t x, int32_t y, uint8_t gray)

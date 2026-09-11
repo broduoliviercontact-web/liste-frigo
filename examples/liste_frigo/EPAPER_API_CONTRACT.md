@@ -6,7 +6,7 @@ The firmware keeps working when these fields are absent. Add them to
 ```json
 {
   "epaperSettings": {
-    "visibleTabs": ["listes", "creche", "meteo", "iss", "air"],
+    "visibleTabs": ["listes", "creche", "meteo", "iss", "air", "bateaux"],
     "activeTab": "iss",
     "preferredTab": "listes",
     "carousel": {
@@ -66,4 +66,10 @@ is kept for firmware compatibility; newer firmware uses `pastTrack` for the
 dotted previous orbit and `futureTrack` for the solid predicted orbit.
 
 Supported tab keys: `listes`, `creche`, `meteo`, `repas`, `metro`, `reglages`,
-`iss`, `air`.
+`iss`, `air`, `agenda`, `bateaux`.
+
+`pages.bateaux` mirrors the lightweight `GET /api/boats` response. It contains
+`status`, `updatedAt`, and up to five entries with `name`, `distanceKm`,
+`speedKmh`, `direction`, `etaMinutes`, and `updatedAt`. A missing or degraded
+AIS feed is represented by an empty `boats` array and never prevents the rest
+of the e-paper state from loading.
