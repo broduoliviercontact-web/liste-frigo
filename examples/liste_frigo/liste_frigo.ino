@@ -16,6 +16,7 @@
 #include "ListeFrigoTouch.h"
 #include "ListeFrigoWifi.h"
 #include "ListeFrigoApi.h"
+#include "ListeFrigoMetro.h"
 #include "ListeFrigoOta.h"
 
 constexpr uint32_t CHECKBOX_REFRESH_IDLE_MS = 800;
@@ -63,6 +64,7 @@ bool render_page_keyboard_extra = false;
 char render_page_keyboard_value[LIST_LABEL_MAX] = {0};
 bool render_page_list_picker = false;
 bool list_picker_open = false;
+bool confirm_add_history = false;
 int32_t selected_list_id = 1;
 bool list_scroll_dirty = false;
 uint32_t last_scroll_input_ms = 0;
@@ -122,6 +124,7 @@ ListPageState list_state = {
 WeatherState weather_state = {};
 MealWeekState meal_week_state = {};
 MetroState metro_state = {};
+uint32_t metro_last_ready_ms = 0;
 EpaperSettings epaper_settings = {{TAB_LISTES, TAB_CRECHE, TAB_METEO, TAB_REPAS, TAB_METRO, TAB_AGENDA, TAB_ISS, TAB_AIR, TAB_BOATS}, NAV_VISIBLE_TAB_MAX, TAB_AGENDA, false, 120};
 bool epaper_settings_received = false;
 IssState iss_state = {};
@@ -520,15 +523,31 @@ void applyApiListState()
         }
     }
 
+    char write_notice[96] = {};
+    if (api.takeWriteNotice(write_notice, sizeof(write_notice))) {
+        display.setWriteNotice(write_notice);
+        display.setAddHistory(api.hasBlockedAdds(), confirm_add_history);
+        if (active_tab == TAB_LISTES) requestPageDisplay(TAB_LISTES, list_state, "etat ajout");
+    }
     MetroState remote_metro = {};
     if (api.takeMetroState(remote_metro)) {
         const bool metro_changed = !sameMetroState(metro_state, remote_metro);
         metro_state = remote_metro;
+        if (metro_state.available) metro_last_ready_ms = millis();
         display.setMetroState(metro_state);
         Serial.printf("METRO: recu lignes=%d\n", metro_state.line_count);
         if (metro_changed && active_tab == TAB_METRO) {
             requestPageDisplay(TAB_METRO, list_state, "metro actualise");
         }
+    }
+
+    // A network loss cannot be allowed to preserve a departure indefinitely.
+    // The next successful snapshot renews this deadline; an unavailable
+    // snapshot clears the page immediately through takeMetroState above.
+    if (metro_state.available && metro_last_ready_ms != 0 && metroSnapshotExpired(metro_last_ready_ms, millis())) {
+        metro_state = {};
+        display.setMetroState(metro_state);
+        if (active_tab == TAB_METRO) requestPageDisplay(TAB_METRO, list_state, "metro expire");
     }
 
     EpaperSettings remote_settings = {};
@@ -830,6 +849,12 @@ void finishKeyboardExit()
         const bool sent = api.sendAddItem(list_state.id, keyboard_submit_value);
         requestPageDisplay(TAB_LISTES, list_state, "keyboard add");
         emitPreviewState(sent ? "keyboard_add" : "keyboard_add_failed");
+        if (!sent) {
+            keyboard_open = true;
+            strlcpy(keyboard_value, keyboard_submit_value, sizeof(keyboard_value));
+            requestKeyboardPageDisplay(list_state, keyboard_value, keyboard_extra_page);
+            return;
+        }
         keyboard_submit_value[0] = '\0';
     } else {
         requestPageDisplay(TAB_LISTES, list_state, "keyboard cancel");
@@ -1060,8 +1085,16 @@ bool handleListGesture(const TouchEvent &event)
             Serial.println("Liste Frigo: une seule liste, selection sans effet");
             return true;
         }
-        Serial.printf("Liste Frigo: selection liste suivante id=%ld\n", static_cast<long>(target_id));
-        api.sendSelectList(target_id);
+        ListPageState selected = {};
+        if (!api.getCachedListState(target_id, selected)) {
+            Serial.printf("Liste Frigo: selection liste inconnue id=%ld\n", static_cast<long>(target_id));
+            return true;
+        }
+        Serial.printf("Liste Frigo: selection locale id=%ld\n", static_cast<long>(target_id));
+        list_state = selected;
+        api.setSelectedListId(target_id);
+        requestPageDisplay(TAB_LISTES, list_state, "selection locale");
+        api.requestStateRefresh();
         return true;
     }
 
@@ -1134,6 +1167,14 @@ void handleReadOnlyTouch()
     }
 
     logTouchEvent(event);
+    if (list_picker_open && api.hasBlockedAdds() && event.logical_y >= 850 && event.logical_y < 928 && event.logical_x >= 32 && event.logical_x < 508) {
+        if (confirm_add_history) { api.acknowledgeBlockedAdds(); confirm_add_history = false; }
+        else confirm_add_history = true;
+        display.setAddHistory(api.hasBlockedAdds(), confirm_add_history);
+        requestListPickerDisplay(list_state); return;
+    }
+    confirm_add_history = false;
+    display.setAddHistory(api.hasBlockedAdds(), false);
     if (event.logical_y >= NAV_TOP && event.logical_y < NAV_TOP + NAV_HEIGHT &&
         event.logical_x >= NAV_LEFT && event.logical_x < NAV_LEFT + NAV_WIDTH) {
         const int8_t nav_count = max<int8_t>(1, epaper_settings.visible_tab_count);
@@ -1227,6 +1268,7 @@ void handleReadOnlyTouch()
 void setup()
 {
     Serial.begin(115200);
+    Serial.println("Friiigooo 2026-09-11-reliability-1 | " __DATE__ " " __TIME__);
     delay(1000);
     Serial.println("Liste Frigo: demarrage");
 

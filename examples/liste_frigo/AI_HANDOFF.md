@@ -22,7 +22,8 @@ flowchart TD
     Boats --> AIS
 ```
 
-The firmware talks only to `GET /api/epaper/v1/state`. The AISStream API key is
+The firmware reads `GET /api/epaper/v1/state` and sends shopping mutations to
+`POST /api/lists`. The AISStream API key is
 owned by the website/server and must never be embedded in firmware or browser
 code.
 
@@ -157,3 +158,12 @@ the `/api/epaper/v1/state` contract compatible with this firmware.
 
 Do not revert unrelated deletions or local files unless Jean-Claude explicitly
 asks. Keep commits focused on Friiigooo files.
+
+## Local reliability continuation
+
+The reliability release uses a versioned NVS journal for additions
+(`frigo-adds`, key `queue`). Do not erase it automatically: uncertain operations
+may already have committed remotely. The list picker offers explicit two-step
+acknowledgement after checking the website. Firmware and web Git histories
+remain independent; never merge the firmware branch into the website main.
+Physical power-loss/recovery and acknowledgement UI tests remain required.

@@ -5,6 +5,8 @@
 class ListeFrigoDisplay {
 public:
     bool begin();
+    void setAddHistory(bool blocked, bool confirming) { blocked_adds = blocked; confirm_add_history = confirming; }
+    void setWriteNotice(const char *message);
     void showPage(NavTabId tab, bool clear_panel, const ListPageState *list_state = nullptr);
     void showListPicker(const ListPageState &list_state);
     void showKeyboard(const ListPageState &list_state, const char *value, bool extra_page);
@@ -29,6 +31,9 @@ private:
     uint8_t *physical_fb = nullptr;
     uint8_t *partial_fb = nullptr;
 
+    bool blocked_adds = false;
+    bool confirm_add_history = false;
+    char write_notice[96] = {};
     const ListPageState *current_list_state = nullptr;
     uint8_t weather_hour = 0;
     uint8_t weather_minute = 0;

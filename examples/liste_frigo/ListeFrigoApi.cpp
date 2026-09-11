@@ -1,8 +1,11 @@
 #include "ListeFrigoApi.h"
+#include "ListeFrigoMetro.h"
 
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <time.h>
+#include <esp_system.h>
 #include "secrets.h"
 #include "ListeFrigoTls.h"
 
@@ -13,7 +16,7 @@ constexpr const char *LISTS_API_URL = "https://liste-frigo.pliskain.chatgpt.site
 constexpr uint32_t FIRST_FETCH_DELAY_MS = 3000;
 constexpr uint32_t SUCCESS_FETCH_INTERVAL_MS = 15000;
 constexpr uint32_t MAX_RETRY_DELAY_MS = 120000;
-constexpr uint32_t HTTP_TIMEOUT_MS = 60000;
+constexpr uint32_t HTTP_TIMEOUT_MS = 15000;
 constexpr uint32_t WRITE_GAP_MS = 250;
 constexpr uint32_t TOGGLE_RETRY_DELAYS_MS[] = {1000, 2000, 5000, 10000, 30000};
 
@@ -279,12 +282,18 @@ void fetchTask(void *param)
         const char *url = is_write_request ? LISTS_API_URL : state_url.c_str();
 
         if (http.begin(secure_client, url)) {
+            const char *collected[] = {"Retry-After"};
+            http.collectHeaders(collected, 1);
             http.addHeader("Accept", "application/json");
 #if defined(SUPERVIE_ACCESS_CODE)
             http.addHeader("X-SUPERVIE-ACCESS-CODE", SUPERVIE_ACCESS_CODE);
 #endif
             if (is_write_request) {
                 http.addHeader("Content-Type", "application/json");
+                if (kind == ListeFrigoApi::REQUEST_ADD_ITEM) {
+                    char key[33] = {}; client->snapshotAddKey(key, sizeof(key));
+                    http.addHeader("x-supervie-mutation-id", key);
+                }
                 JsonDocument body;
                 if (kind == ListeFrigoApi::REQUEST_TOGGLE_ITEM) {
                     body["action"] = "toggleItem";
@@ -307,6 +316,7 @@ void fetchTask(void *param)
                 http_code = http.GET();
             }
             payload = http.getString();
+            if (http_code == 429) client->setWriteRetryAfter(http.header("Retry-After").c_str());
 
             if (is_write_request) {
                 if (http_code == HTTP_CODE_OK) {
@@ -351,6 +361,7 @@ void fetchTask(void *param)
                                 ++summary.remaining_count;
                             }
                         }
+                        summary.remaining_count = constrain(list["remainingCount"] | summary.remaining_count, 0, 999);
                         ++copied_lists;
                     }
                     for (JsonObject list : lists) {
@@ -374,6 +385,9 @@ void fetchTask(void *param)
                             ++copied_items;
                         }
                         cached.item_count = copied_items;
+                        cached.remaining_count = summaries[fetched_list_cache_count].remaining_count;
+                        cached.item_overflow = constrain(list["overflow"] | 0, 0, 255);
+                        cached.list_overflow = constrain(doc["pages"]["listes"]["overflow"] | 0, 0, 255);
                         cached.scroll_offset = 0;
                         if (cached.id == selected_list_id || fetched_list_state == nullptr) {
                             fetched_list_state = &cached;
@@ -458,19 +472,21 @@ void fetchTask(void *param)
                                 if (target.direction_count >= METRO_DIRECTION_COUNT) break;
                                 MetroDirection &target_direction = target.directions[target.direction_count];
                                 copyEpaperText(target_direction.destination, sizeof(target_direction.destination), direction["destination"] | "", "-");
-                                for (JsonVariant minute : direction["minutes"].as<JsonArray>()) {
-                                    if (target_direction.passage_count >= METRO_PASSAGE_COUNT) break;
-                                    if (minute.isNull()) continue;
-                                    const int value = minute.as<int>();
-                                    if (value < 0 || value > 180) continue;
-                                    target_direction.minutes[target_direction.passage_count++] = static_cast<uint8_t>(value);
-                                }
+                            for (JsonVariant minute : direction["minutes"].as<JsonArray>()) {
+                                if (target_direction.passage_count >= METRO_PASSAGE_COUNT) break;
+                                uint8_t parsed_minutes = 0;
+                                if (!decodeMetroMinute(minute, parsed_minutes)) continue;
+                                target_direction.minutes[target_direction.passage_count++] = parsed_minutes;
+                            }
                                 if (target_direction.passage_count > 0) ++target.direction_count;
                             }
                             target.available = target.available && target.direction_count > 0;
                         }
-                        has_metro_state = fetched_metro.line_count > 0;
                     }
+                    // A valid aggregate snapshot explicitly replaces the
+                    // previous state even when Metro is unavailable. Keeping
+                    // the old values would display stale departures as live.
+                    has_metro_state = !metro.isNull();
 
                     JsonObject agenda = doc["pages"]["agenda"].as<JsonObject>();
                     if (strcmp(agenda["status"] | "", "ready") == 0) {
@@ -556,10 +572,13 @@ void fetchTask(void *param)
                         has_iss_state = true;
                     }
 
+                    has_iss_state = true; // Explicit unavailable must clear the previous page.
+
                     JsonObject air = doc["pages"]["air"].as<JsonObject>();
                     if (strcmp(air["status"] | "", "ready") == 0) {
                         fetched_air.available = true;
                         fetched_air.radius_km = air["radiusKm"] | 25;
+                        fetched_air.simulation = strcmp(air["scan"]["mode"] | "", "simulation") == 0;
                         for (JsonObject aircraft : air["aircraft"].as<JsonArray>()) {
                             if (fetched_air.aircraft_count >= AIRCRAFT_COUNT) break;
                             Aircraft &target = fetched_air.aircraft[fetched_air.aircraft_count++];
@@ -647,6 +666,12 @@ void ListeFrigoApi::begin()
         return;
     }
 
+    add_store_ready = add_store.begin("frigo-adds", false);
+    if (add_store_ready && add_store.getBytesLength("queue") > 0) {
+        if (add_store.getBytesLength("queue") != sizeof(adds) || add_store.getBytes("queue", &adds, sizeof(adds)) != sizeof(adds) || adds.version != 1 || adds.count > 8) {
+            add_store_ready = false; notice("Journal ajouts invalide : verifier sur site");
+        }
+    }
     BaseType_t created = xTaskCreatePinnedToCore(fetchTask, "epaper_api", 12288, this, 1, &task_handle, 0);
     if (created != pdPASS) {
         Serial.println("API: erreur creation tache HTTP au demarrage");
@@ -654,7 +679,9 @@ void ListeFrigoApi::begin()
         return;
     }
 
-    Serial.println("API: client e-paper pret");
+    Serial.printf("API: client e-paper pret, ajouts conserves=%u\n", adds.count);
+    if (adds.count) notice("Ajouts conserves : verification en cours");
+    for (uint8_t i = 0; i < adds.count; ++i) if (adds.entries[i].blocked) notice("Ajouts bloques : verifier la liste sur site");
     state = API_IDLE;
     next_fetch_ms = millis() + FIRST_FETCH_DELAY_MS;
 }
@@ -854,27 +881,60 @@ bool ListeFrigoApi::sendSelectList(int32_t list_id)
     return true;
 }
 
-bool ListeFrigoApi::sendAddItem(int32_t list_id, const char *label)
-{
-    if (state == API_DISABLED || task_handle == nullptr || list_id <= 0 || label == nullptr || !*label) {
-        Serial.println("API: ajout item non envoye, client indisponible ou donnees absentes");
-        return false;
+bool ListeFrigoApi::persistAdds() {
+    return add_store_ready && add_store.putBytes("queue", &adds, sizeof(adds)) == sizeof(adds);
+}
+uint64_t ListeFrigoApi::serverNow() const {
+    return server_epoch_ms ? server_epoch_ms + static_cast<uint32_t>(millis() - server_epoch_tick) : 0;
+}
+void ListeFrigoApi::notice(const char *message) {
+    strlcpy(write_notice, message, sizeof(write_notice)); write_notice_ready = true;
+}
+bool ListeFrigoApi::takeWriteNotice(char *target, size_t size) {
+    if (!write_notice_ready) return false;
+    strlcpy(target, write_notice, size); write_notice_ready = false; return true;
+}
+void ListeFrigoApi::setWriteRetryAfter(const char *value) {
+    write_retry_ms = 60000;
+    char *end = nullptr; const unsigned long seconds = strtoul(value, &end, 10);
+    if (*value && end && !*end && seconds <= 86400UL) { write_retry_ms = seconds * 1000UL; return; }
+    struct tm parsed = {};
+    if (strptime(value, "%a, %d %b %Y %H:%M:%S GMT", &parsed) && serverNow()) {
+        const uint64_t target = static_cast<uint64_t>(mktime(&parsed)) * 1000;
+        if (target > serverNow()) write_retry_ms = static_cast<uint32_t>(min<uint64_t>(target - serverNow(), 86400000ULL));
     }
-
-    if (request_in_flight || result_ready || toggle_result_ready) {
-        queued_toggle_item_id = list_id;
-        queued_toggle_checked = false;
-        strlcpy(queued_add_label, label, sizeof(queued_add_label));
-        queued_request_kind = REQUEST_ADD_ITEM;
-        Serial.printf("API: ajout mis en attente liste=%ld label=%s\n", static_cast<long>(list_id), queued_add_label);
-        return true;
+}
+void ListeFrigoApi::snapshotAddKey(char *target, size_t size) const {
+    strlcpy(target, active_add >= 0 ? adds.entries[active_add].key : "", size);
+}
+bool ListeFrigoApi::sendAddItem(int32_t list_id, const char *label) {
+    if (!add_store_ready || !serverNow() || list_id <= 0 || !label || !*label) {
+        notice("Ajout non envoye : synchronisation requise"); return false;
     }
-
-    toggle_item_id = list_id;
-    toggle_checked = false;
-    strlcpy(add_label, label, sizeof(add_label));
-    startAddItem();
-    return true;
+    DurableAdd entry; entry.list_id = list_id; entry.created_at = serverNow();
+    strlcpy(entry.label, label, sizeof(entry.label));
+    snprintf(entry.key, sizeof(entry.key), "%08lx%08lx%08lx%08lx", static_cast<unsigned long>(esp_random()), static_cast<unsigned long>(esp_random()), static_cast<unsigned long>(esp_random()), static_cast<unsigned long>(esp_random()));
+    if (!adds.append(entry)) { notice("File pleine : verifier les ajouts sur site"); return false; }
+    if (!persistAdds()) { adds.remove(adds.count - 1); notice("Journal indisponible : ajout non envoye"); return false; }
+    notice("Ajout conserve, en attente de confirmation");
+    startQueuedRequestIfAny(); return true;
+}
+void ListeFrigoApi::startNextAdd() {
+    if (!serverNow() || !add_store_ready || static_cast<int32_t>(millis() - next_write_ms) < 0) return;
+    for (uint8_t i = 0; i < adds.count; ++i) {
+        auto &entry = adds.entries[i];
+        if (entry.blocked) continue;
+        if (addExpired(entry.created_at, serverNow()) || entry.attempts >= 4) {
+            entry.blocked = addExpired(entry.created_at, serverNow()) ? 3 : 2;
+            if (!persistAdds()) add_store_ready = false;
+            notice("Ajout incertain : verifier la liste sur site"); continue;
+        }
+        active_add = i; toggle_item_id = entry.list_id;
+        strlcpy(add_label, entry.label, sizeof(add_label));
+        ++entry.attempts;
+        if (!persistAdds()) { --entry.attempts; add_store_ready = false; notice("Journal indisponible : ajout suspendu"); return; }
+        startAddItem(); return;
+    }
 }
 
 void ListeFrigoApi::snapshotRequest(RequestKind &kind, int32_t &item_id, bool &checked, uint32_t &generation, int32_t &selected_list,
@@ -994,6 +1054,7 @@ void ListeFrigoApi::startQueuedRequestIfAny()
     }
 
     startNextToggle();
+    if (!request_in_flight) startNextAdd();
     if (request_in_flight || queued_request_kind == REQUEST_NONE) {
         return;
     }
@@ -1038,6 +1099,11 @@ void ListeFrigoApi::consumeResult()
     result_ready = false;
 
     if (result_success) {
+        struct tm parsed = {};
+        if (strptime(result_generated_at, "%Y-%m-%dT%H:%M:%S", &parsed)) {
+            server_epoch_ms = static_cast<uint64_t>(mktime(&parsed)) * 1000;
+            server_epoch_tick = millis();
+        }
         Serial.printf(
             "API: succes HTTP %d, %u octets, activeTab=%s, listes=%lu, items=%lu\n",
             result_http_code,
@@ -1066,6 +1132,20 @@ void ListeFrigoApi::consumeResult()
 void ListeFrigoApi::consumeToggleResult()
 {
     toggle_result_ready = false;
+
+    if (request_kind == REQUEST_ADD_ITEM && active_add >= 0) {
+        if (result_success) {
+            DurableAdds before = adds; adds.remove(active_add);
+            if (!persistAdds()) { adds = before; notice("Ajout confirme, nettoyage journal en attente"); }
+            else notice("Ajout confirme");
+        } else if (result_http_code >= 400 && result_http_code < 500 && result_http_code != 401 && result_http_code != 429 && result_http_code != 409) {
+            adds.entries[active_add].blocked = 1;
+            if (!persistAdds()) add_store_ready = false;
+            notice("Ajout refuse : verifier la liste sur site");
+        } else { notice("Ajout incertain, reprise avec la meme cle"); }
+        active_add = -1; state = API_IDLE; next_write_ms = millis() + (result_http_code == 429 ? write_retry_ms : 5000);
+        next_fetch_ms = millis() + 1000; return;
+    }
 
     if (result_success) {
         const char *operation = request_kind == REQUEST_ADD_ITEM ? "ajout envoye" :
@@ -1216,4 +1296,16 @@ void ListeFrigoApi::scheduleRetry()
     next_fetch_ms = millis() + retry_delay_ms;
     Serial.printf("API: prochaine tentative dans %lu ms\n", static_cast<unsigned long>(retry_delay_ms));
     retry_delay_ms = min(retry_delay_ms * 2, MAX_RETRY_DELAY_MS);
+}
+
+bool ListeFrigoApi::hasBlockedAdds() const {
+    for (uint8_t i = 0; i < adds.count; ++i) if (adds.entries[i].blocked) return true;
+    return false;
+}
+bool ListeFrigoApi::acknowledgeBlockedAdds() {
+    if (request_in_flight || active_add >= 0) { notice("Attendre la fin de la synchronisation"); return false; }
+    DurableAdds before = adds;
+    for (int i = adds.count - 1; i >= 0; --i) if (adds.entries[i].blocked) adds.remove(i);
+    if (!persistAdds()) { adds = before; notice("Historique conserve : stockage indisponible"); return false; }
+    notice("Historique acquitte, aucun ajout renvoye"); return true;
 }

@@ -96,6 +96,13 @@ aircraft positions without knowing the physical e-paper resolution. `track`
 is kept for firmware compatibility; newer firmware uses `pastTrack` for the
 dotted previous orbit and `futureTrack` for the solid predicted orbit.
 
+`pages.metro` has `status: "ready"`, an `updatedAt` timestamp, and `lines`.
+Each available line has `directions`; every direction has a `destination` and
+`minutes`, an array of JSON **integer numbers** from 0 to 180 (for example
+`[3, 7, 12]`). `0` alone means a real departure at the platform. A missing,
+textual, fractional, negative, or out-of-range value is invalid data: firmware
+ignores that direction and must not display it as `A QUAI`.
+
 Supported tab keys: `listes`, `creche`, `meteo`, `repas`, `metro`, `reglages`,
 `iss`, `air`, `agenda`, `bateaux`.
 
@@ -106,3 +113,30 @@ The current firmware renders a static Canal de l'Ourcq map when `boats` is
 empty, so a live empty result is normal and should not be converted into an
 error. A missing or degraded AIS feed is represented by an empty `boats` array
 and never prevents the rest of the e-paper state from loading.
+
+For `pages.listes`, the server sends at most eight lists and 24 items per list.
+Each list includes `remainingCount` (the full number of unchecked items) and
+`overflow` (items omitted from the device payload); `pages.listes.overflow`
+counts omitted lists. Current firmware displays these values so a partial list
+is never mistaken for a complete one.
+
+## Reliability release 2026-09-11-reliability-1
+
+The local firmware expires Metro after 45 seconds without a fresh ready state;
+explicit unavailable snapshots clear Metro and ISS immediately. This needs
+physical verification after installation.
+
+Keyboard additions use POST /api/lists with x-supervie-mutation-id. Eight
+intentions are persisted in NVS before transmission; labels and keys only,
+never credentials. Replays retain the exact key and sent content. Expiration
+is 24 hours from the server-derived creation time, at most four attempts;
+refused/uncertain/expired entries remain until explicitly acknowledged. The
+list picker offers two-step acknowledgement after checking the lists on the
+site; acknowledgement only removes blocked history, never resends an action.
+Storage failure or a full queue refuses the new addition and keeps the input.
+An authenticated state must establish server time before additions can resume.
+
+ISS sourceUpdatedAt/sourceAgeSeconds/degraded describe the orbital source,
+separately from the calculation timestamp. Site settings writes now require a
+revision from GET /api/epaper-settings; a stale write returns 409. The firmware
+only reads these settings and needs no write-protocol change.

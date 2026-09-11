@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 #include "ListeFrigoTypes.h"
+#include "ListeFrigoAddQueue.h"
+#include <Preferences.h>
 
 class ListeFrigoApi {
 public:
@@ -21,6 +23,11 @@ public:
     };
 
     void begin();
+    bool hasBlockedAdds() const;
+    bool acknowledgeBlockedAdds();
+    bool takeWriteNotice(char *target, size_t size);
+    void setWriteRetryAfter(const char *value);
+    void snapshotAddKey(char *target, size_t size) const;
     void poll(bool wifi_connected);
     void setSelectedListId(int32_t list_id);
     void requestStateRefresh();
@@ -82,6 +89,19 @@ private:
     bool toggle_checked = false;
     uint32_t toggle_generation = 0;
     char add_label[LIST_LABEL_MAX] = {0};
+    Preferences add_store;
+    DurableAdds adds;
+    bool add_store_ready = false;
+    int8_t active_add = -1;
+    uint64_t server_epoch_ms = 0;
+    uint32_t server_epoch_tick = 0;
+    uint32_t write_retry_ms = 60000;
+    char write_notice[96] = {};
+    bool write_notice_ready = false;
+    bool persistAdds();
+    void notice(const char *message);
+    uint64_t serverNow() const;
+    void startNextAdd();
     int32_t queued_toggle_item_id = 0;
     bool queued_toggle_checked = false;
     char queued_add_label[LIST_LABEL_MAX] = {0};

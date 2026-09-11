@@ -74,7 +74,7 @@ struct GroceryItem {
 struct ListSummary {
     int32_t id;
     char name[LIST_NAME_MAX];
-    int8_t remaining_count;
+    int16_t remaining_count;
 };
 
 struct ListPageState {
@@ -84,6 +84,9 @@ struct ListPageState {
     int8_t list_count;
     GroceryItem items[LIST_ITEM_COUNT];
     int8_t item_count;
+    int16_t remaining_count;
+    uint8_t item_overflow;
+    uint8_t list_overflow;
     int8_t scroll_offset;
 };
 
@@ -199,6 +202,7 @@ struct Aircraft {
 
 struct AirState {
     bool available;
+    bool simulation;
     uint16_t radius_km;
     Aircraft aircraft[AIRCRAFT_COUNT];
     int8_t aircraft_count;

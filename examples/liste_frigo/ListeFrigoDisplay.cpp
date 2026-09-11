@@ -449,6 +449,9 @@ void ListeFrigoDisplay::drawListesPage(const ListPageState *list_state)
             {6, "lait", false},
         },
         6,
+        6,
+        0,
+        0,
         0,
     };
     const ListPageState *state = list_state ? list_state : &fallback;
@@ -461,18 +464,23 @@ void ListeFrigoDisplay::drawListesPage(const ListPageState *list_state)
     fillRect(462, 104, 18, 3, BLACK);
     fillRect(32, 144, LOGICAL_WIDTH - 64, 4, BLACK);
 
-    int8_t remaining = 0;
-    for (int8_t i = 0; i < state->item_count; ++i) {
-        if (!state->items[i].checked) {
-            ++remaining;
+    int16_t remaining = state->remaining_count;
+    if (remaining == 0) {
+        for (int8_t i = 0; i < state->item_count; ++i) {
+            if (!state->items[i].checked) ++remaining;
         }
     }
     char summary[40] = {0};
     snprintf(summary, sizeof(summary), "%d articles a acheter", remaining);
     drawText(52, 164, summary, 3, BLACK);
+    if (state->item_overflow > 0 || state->list_overflow > 0) {
+        char overflow[48] = {0};
+        snprintf(overflow, sizeof(overflow), "+%u articles, +%u listes hors ecran", state->item_overflow, state->list_overflow);
+        drawTextLimited(52, 188, overflow, 2, DARK, 430);
+    }
 
     constexpr int32_t list_top = 204;
-    constexpr int32_t list_bottom = 842;
+    const int32_t list_bottom = *write_notice ? 790 : 842;
     const int8_t displayed_items = max<int8_t>(1, min<int8_t>(state->item_count, LIST_ITEM_COUNT));
     const int32_t row_height = max<int32_t>(28, min<int32_t>(44, (list_bottom - list_top) / displayed_items));
     for (int8_t item_index = 0; item_index < state->item_count && item_index < LIST_ITEM_COUNT; ++item_index) {
@@ -483,6 +491,7 @@ void ListeFrigoDisplay::drawListesPage(const ListPageState *list_state)
     if (state->item_count == 0) {
         drawCenteredText(360, "Aucun article", 4, DARK);
     }
+    if (*write_notice) drawTextLimited(32, 822, write_notice, 2, DARK, 476);
     drawPrimaryNavBar(TAB_LISTES);
 }
 
@@ -559,14 +568,16 @@ void ListeFrigoDisplay::drawWeatherPage()
 
 void ListeFrigoDisplay::drawCrechePage()
 {
-    const int8_t departure_temperature_value = weather_state.departure.available ? weather_state.departure.temperature
-        : (weather_state.available ? weather_state.current_temperature : 20);
-    const int8_t return_temperature = weather_state.return_forecast.available ? weather_state.return_forecast.temperature
-        : (weather_state.available ? weather_state.today_max : 24);
+    const bool has_departure = weather_state.departure.available || weather_state.available;
+    const bool has_return = weather_state.return_forecast.available || weather_state.available;
+    const int8_t departure_temperature_value = weather_state.departure.available ? weather_state.departure.temperature : weather_state.current_temperature;
+    const int8_t return_temperature = weather_state.return_forecast.available ? weather_state.return_forecast.temperature : weather_state.today_max;
     char departure_temperature[8] = {0};
     char afternoon_temperature[8] = {0};
-    snprintf(departure_temperature, sizeof(departure_temperature), "%d C", departure_temperature_value);
-    snprintf(afternoon_temperature, sizeof(afternoon_temperature), "%d C", return_temperature);
+    if (has_departure) snprintf(departure_temperature, sizeof(departure_temperature), "%d C", departure_temperature_value);
+    else strlcpy(departure_temperature, "--", sizeof(departure_temperature));
+    if (has_return) snprintf(afternoon_temperature, sizeof(afternoon_temperature), "%d C", return_temperature);
+    else strlcpy(afternoon_temperature, "--", sizeof(afternoon_temperature));
 
     drawText(52, 34, "CRECHE CESAR", 3, DARK);
     drawText(52, 74, "PANTIN", 4, BLACK);
@@ -577,7 +588,7 @@ void ListeFrigoDisplay::drawCrechePage()
     drawBabyAvatar(44, 236);
 
     drawText(240, 218, "CESAR", 4, BLACK);
-    drawText(240, 260, "Aujourd hui", 2, DARK);
+    drawText(240, 260, "Liste fixe", 2, DARK);
     const char *clothes[] = {"Body leger", "T shirt leger", "Short leger"};
     for (int8_t row = 0; row < 3; ++row) {
         const int32_t y = 306 + row * 58;
@@ -590,11 +601,14 @@ void ListeFrigoDisplay::drawCrechePage()
     fillRect(32, 600, LOGICAL_WIDTH - 64, 4, BLACK);
     drawText(52, 632, "RETOUR 17H", 2, DARK);
     drawText(52, 664, afternoon_temperature, 6, BLACK);
-    const int16_t return_weather_code = weather_state.return_forecast.available ? weather_state.return_forecast.weather_code
-        : (weather_state.available ? weather_state.today_weather_code : 1);
+    const int16_t return_weather_code = weather_state.return_forecast.available ? weather_state.return_forecast.weather_code : weather_state.today_weather_code;
     const bool return_is_day = weather_state.return_forecast.available ? weather_state.return_forecast.is_day : true;
-    drawCrecheWeatherIcon(306, 666, return_weather_code, return_is_day, BLACK);
-    drawText(374, 680, weatherLabel(return_weather_code), 2, BLACK);
+    if (has_return) {
+        drawCrecheWeatherIcon(306, 666, return_weather_code, return_is_day, BLACK);
+        drawText(374, 680, weatherLabel(return_weather_code), 2, BLACK);
+    } else {
+        drawText(306, 680, "Meteo indisponible", 2, DARK);
+    }
     drawText(374, 716, "Gilet leger", 2, DARK);
     fillRect(32, 770, LOGICAL_WIDTH - 64, 4, BLACK);
     drawCenteredText(804, "CESAR A LA CRECHE", 2, DARK);
@@ -974,7 +988,7 @@ void ListeFrigoDisplay::drawAirPage()
         snprintf(radius_label, sizeof(radius_label), "%u km", air_state.available && air_state.radius_km > 0 ? air_state.radius_km : 25);
         drawText(52, 720, "Portee", 2, DARK);
         drawText(152, 714, radius_label, 3, BLACK);
-        drawText(52, 764, air_state.available ? "Trafic synchronise" : "Trafic aerien en attente", 2, DARK);
+        drawText(52, 764, air_state.available ? (air_state.simulation ? "Simulation" : "Trafic synchronise") : "Trafic aerien en attente", 2, DARK);
     }
     drawPrimaryNavBar(TAB_AIR);
 }
@@ -1504,7 +1518,11 @@ void ListeFrigoDisplay::drawListPickerPage(const ListPageState &list_state)
     for (int8_t i = 0; i < list_state.list_count; ++i) {
         drawListPickerRow(166 + i * 84, list_state.lists[i], list_state.lists[i].id == list_state.id);
     }
-    drawText(52, 872, "Le contenu se modifie sur le site", 3, DARK);
+    if (blocked_adds) {
+        drawRect(32, 850, 476, 78, 2, BLACK);
+        drawTextLimited(42, 860, confirm_add_history ? "J ai verifie les ajouts sur le site" : "Ajouts bloques : verifier sur le site", 2, DARK, 456);
+        drawTextLimited(42, 894, confirm_add_history ? "Toucher pour effacer cet historique" : "Toucher pour acquitter l historique", 2, DARK, 456);
+    } else drawText(52, 872, "Le contenu se modifie sur le site", 3, DARK);
 }
 
 void ListeFrigoDisplay::drawKeyboardPage(const ListPageState &list_state, const char *value, bool extra_page)
@@ -2045,4 +2063,8 @@ int32_t ListeFrigoDisplay::textWidth(const char *text, int32_t scale)
         ++text;
     }
     return width > 0 ? width - scale : 0;
+}
+
+void ListeFrigoDisplay::setWriteNotice(const char *message) {
+    strlcpy(write_notice, message, sizeof(write_notice));
 }
