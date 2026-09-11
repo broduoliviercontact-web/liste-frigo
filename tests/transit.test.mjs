@@ -52,7 +52,9 @@ function harness({ updatedAt = iso(NOW), checkedAt = NOW, times = [NOW + 180000]
   } } };
   const route = load('../app/api/transit/route.ts', {
     '../../access': { requireSupervieAccess: async () => null },
-    '../fetch-with-timeout': { fetchWithTimeout: async () => {
+    '../fetch-with-timeout': { fetchWithTimeout: async (input) => {
+      const url = new URL(input);
+      assert.deepEqual([...url.searchParams.keys()].sort(), ["LineRef", "MonitoringRef"]);
       requests++;
       if (providerFails) throw new Error('PRIM unavailable');
       return Response.json({ Siri: { ServiceDelivery: { StopMonitoringDelivery: [{ MonitoredStopVisit: live ? [{ MonitoredVehicleJourney: { DestinationName: [{ value: "Bobigny" }], MonitoredCall: { ExpectedDepartureTime: iso(NOW + 60 * 60000) } } }] : [] }] } } });
