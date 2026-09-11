@@ -39,7 +39,7 @@ test('ISS: fresh epoch, failure fallback, expiry, bounded attempts', async () =>
   assert.equal(calls, 1); assert.equal(first.status, 'ready'); assert.equal(first.sourceAgeSeconds, 7200);
   fail = true; clock.now += 7 * 3600000;
   assert.equal((await route.readIss()).degraded, true);
-  await route.readIss(); assert.equal(calls, 2);
+  await route.readIss(); assert.equal(calls, 3);
   clock.now += 48 * 3600000;
   await assert.rejects(route.readIss(), /périmés/);
   const before = calls; await assert.rejects(route.readIss()); assert.equal(calls, before);
@@ -69,4 +69,36 @@ test('weather 429: no new current-provider request before Retry-After, concurren
   assert.equal(currentCalls, 1); assert.equal(forecastCalls, 1);
   clock.now += 180000; await route.readPantinWeather(); assert.equal(currentCalls, 1);
   clock.now += 121000; await route.readPantinWeather(); assert.equal(currentCalls, 2);
+});
+
+
+test('ISS: secondary source restores both tracks after primary timeout, rejects stale secondary data', async () => {
+  const clock = { now: Date.parse('2026-09-11T14:00:00Z') };
+  const policy = load('../app/api/source-policy.ts', {}, clock);
+  const urls = [];
+  const route = load('../app/api/iss/route.ts', {
+    '../source-policy': policy, '../../access': {}, 'satellite.js': satellite,
+    '../fetch-with-timeout': { fetchWithTimeout: async (url, init, timeout) => {
+      urls.push(url); assert.equal(timeout, 4000);
+      if (url.includes('celestrak')) throw new Error('timeout');
+      assert.equal(url, 'https://api.wheretheiss.at/v1/satellites/25544/tles?format=text');
+      return new Response('ISS (ZARYA)\n1 25544U 98067A   26254.50000000  .00013495  00000+0  25209-3 0  9997\n2 25544  51.6292 245.3706 0004854 110.6068 249.5441 15.49061543584742');
+    } },
+  }, clock);
+  const [first, second] = await Promise.all([route.readIss(), route.readIss()]);
+  assert.equal(urls.length, 2);
+  assert.equal(first.status, 'ready'); assert.equal(second.source, 'Where the ISS at');
+  assert.equal(first.degraded, true);
+  for (const track of [first.pastTrack, first.futureTrack]) {
+    assert.equal(track.length, 7);
+    assert.ok(track.every(p => Number.isFinite(p.latitude) && Math.abs(p.latitude) <= 90 && Number.isFinite(p.longitude) && Math.abs(p.longitude) <= 180));
+    assert.notEqual(track[0].longitude, track[6].longitude);
+  }
+  assert.equal(first.futureTrack[0].latitude, first.latitude);
+  assert.equal(first.pastTrack[6].longitude, first.longitude);
+  await route.readIss(); assert.equal(urls.length, 2);
+  clock.now += 49 * 3600000;
+  await assert.rejects(route.readIss(), /périmés/);
+  assert.equal(urls.length, 4);
+  await assert.rejects(route.readIss()); assert.equal(urls.length, 4);
 });

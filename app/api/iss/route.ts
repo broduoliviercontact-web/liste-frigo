@@ -3,9 +3,12 @@ import { requireSupervieAccess } from "../../access";
 import { fetchWithTimeout } from "../fetch-with-timeout";
 import { degreesLat, degreesLong, eciToGeodetic, gstime, propagate, twoline2satrec } from "satellite.js";
 
-const TLE_URL = "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE";
+const TLE_SOURCES = [
+  { name: "CelesTrak", url: "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE" },
+  { name: "Where the ISS at", url: "https://api.wheretheiss.at/v1/satellites/25544/tles?format=text" },
+];
 const TLE_CACHE_MS = 6 * 60 * 60 * 1000;
-let tleCache: { lines: readonly [string, string]; expiresAt: number } | null = null;
+let tleCache: { lines: readonly [string, string]; expiresAt: number; source: string } | null = null;
 let retryAt = 0;
 let loading: Promise<readonly [string, string]> | null = null;
 
@@ -33,26 +36,29 @@ async function fetchTle() {
     if (tleCache && freshTle(tleEpoch(tleCache.lines[0]))) return tleCache.lines;
     throw new Error("Éléments orbitaux ISS indisponibles ou périmés");
   }
-  try {
-    const response = await fetchWithTimeout(TLE_URL, {
+  for (const source of TLE_SOURCES) {
+   try {
+    const response = await fetchWithTimeout(source.url, {
       headers: { Accept: "text/plain" },
       cf: { cacheEverything: true, cacheTtl: 21_600 },
-    } as RequestInit);
-    if (!response.ok) throw new Error(`CelesTrak HTTP ${response.status}`);
+    } as RequestInit, 4_000);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const lines = (await response.text()).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
     const line1 = lines.find((line) => line.startsWith("1 25544"));
     const line2 = lines.find((line) => line.startsWith("2 25544"));
     if (!line1 || !line2) throw new Error("TLE ISS incomplet");
     if (!freshTle(tleEpoch(line1))) throw new Error("Éléments orbitaux ISS périmés");
     const tle = [line1, line2] as const;
-    tleCache = { lines: tle, expiresAt: Date.now() + TLE_CACHE_MS };
+    tleCache = { lines: tle, expiresAt: Date.now() + TLE_CACHE_MS, source: source.name };
+    retryAt = 0;
     return tle;
   } catch (error) {
-    console.error(`ISS TLE unavailable: ${error instanceof Error ? error.message : String(error)}`);
-    retryAt = Date.now() + 60_000;
-    if (tleCache && freshTle(tleEpoch(tleCache.lines[0]))) return tleCache.lines;
-    throw new Error("Éléments orbitaux ISS indisponibles ou périmés");
+    console.error(`ISS TLE ${source.name} unavailable: ${error instanceof Error ? error.message : String(error)}`);
+   }
   }
+  retryAt = Date.now() + 60_000;
+  if (tleCache && freshTle(tleEpoch(tleCache.lines[0]))) return tleCache.lines;
+  throw new Error("Éléments orbitaux ISS indisponibles ou périmés");
 }
 
 async function readTle() {
@@ -88,7 +94,8 @@ export async function readIss() {
     updatedAt: now.toISOString(),
     sourceUpdatedAt: new Date(tleEpoch(line1)).toISOString(),
     sourceAgeSeconds: Math.round((now.getTime() - tleEpoch(line1)) / 1000),
-    degraded: Date.now() < retryAt,
+    source: tleCache?.source,
+    degraded: Date.now() < retryAt || tleCache?.source !== "CelesTrak",
     speedKmh: Math.round(current.velocity),
     over: describePosition(current.latitude, current.longitude),
     latitude: current.latitude,

@@ -499,3 +499,13 @@ git log --oneline --decorate -8
 - Diagnostic protégé : GET `/api/version`, version affichée dans les réglages.
 - Validation ajoutée : `npm run test:reliability` et
   `npm run test:browser:settings-keyboard`.
+
+
+### Secours ISS
+
+CelesTrak reste prioritaire. Si cette source échoue ou renvoie des éléments trop
+anciens, le serveur essaie les TLE de [Where the ISS at](https://wheretheiss.at/w/developer).
+Chaque connexion est limitée à 4 secondes pour rester dans le budget du snapshot.
+Les mêmes contrôles ISS/âge maximal de 48 h s’appliquent aux deux sources ; les
+trajectoires passée et future sont calculées depuis les éléments acceptés. Le
+secours est signalé par `degraded`, sans trajectoire fictive en cas de double panne.
