@@ -18,6 +18,7 @@ const MIN_MOVING_SPEED_KNOTS = 0.5;
 const MAX_RESULTS = 8;
 const COLLECTION_WINDOW_MS = 18_000;
 const FRESH_CONNECTION_MS = 60_000;
+const LIVE_WARMUP_MS = 3_000;
 
 export type BoatDirection = "PARIS" | "BOBIGNY" | "INDETERMINE";
 
@@ -213,7 +214,7 @@ class AisService {
   private lastLogAt = 0;
 
   refresh(apiKey: string, keepAlive: (promise: Promise<unknown>) => void) {
-    if (!apiKey || Date.now() < this.retryAfter) return;
+    if (!apiKey || Date.now() < this.retryAfter) return null;
     if (this.apiKey && this.apiKey !== apiKey) {
       this.reconnectAttempt = 0;
       this.retryAfter = 0;
@@ -224,6 +225,7 @@ class AisService {
       this.collection = this.collect().finally(() => { this.collection = null; });
       keepAlive(this.collection);
     }
+    return this.collection;
   }
 
   snapshot(useMock: boolean) {
@@ -341,6 +343,14 @@ export async function readBoats() {
   const apiKey = typeof runtime.AISSTREAM_API_KEY === "string" ? runtime.AISSTREAM_API_KEY : process.env.AISSTREAM_API_KEY ?? "";
   // Miniflare's Vite runner cannot reliably proxy this external WebSocket and
   // can stall unrelated local routes. Production Workers support the client.
-  if (!useMock && !import.meta.env.DEV) aisService.refresh(apiKey, workers.waitUntil);
+  if (!useMock && !import.meta.env.DEV) {
+    const collection = aisService.refresh(apiKey, workers.waitUntil);
+    if (collection) {
+      await Promise.race([
+        collection,
+        new Promise<void>((resolve) => setTimeout(resolve, LIVE_WARMUP_MS)),
+      ]);
+    }
+  }
   return aisService.snapshot(useMock);
 }
