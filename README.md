@@ -1,511 +1,278 @@
-# SUPERVIE
+<div align="center">
 
-SUPERVIE est une interface familiale pensee pour un ecran e-paper tactile LILYGO T5 4,7 pouces fixe verticalement sur un refrigerateur.
+# Friiigooo
 
-Le site sert a la fois d'application web pour gerer les donnees et de backend JSON pour le firmware e-paper. L'interface reprend volontairement les contraintes de l'ecran physique: format portrait 540 x 960, contraste noir/blanc, gros boutons, peu de texte visible a la fois.
+### Le tableau de bord de la famille, sur le frigo.
 
-Site de production: <https://liste-frigo.pliskain.chatgpt.site>
+Les courses, les repas et les rendez-vous au même endroit.<br />
+La météo, les prochains départs et un petit regard vers l’espace.
 
-## Etat actuel
+**Une application web · Un écran e-paper tactile · Des données partagées**
 
-Fonctionnalites disponibles:
+[Ouvrir le site](https://liste-frigo.pliskain.chatgpt.site) · [Firmware e-paper](https://github.com/broduoliviercontact-web/liste-frigo/tree/firmware/liste-frigo-epaper) · [Installation](#démarrer-en-local) · [Tests](#tester-le-projet)
 
-- Listes de courses partagees: creation, renommage, suppression, ajout multi-lignes, coche/decocher, suppression des articles faits.
-- Onglet Creche: conseil tenue de Cesar selon la meteo de Pantin.
-- Onglet Meteo: meteo actuelle, min/max, 12 heures de prevision et demain.
-- Onglet Repas: planning repas midi/soir sur la semaine, edition par jour, vue hebdomadaire detaillee.
-- Onglet Metro: prochains passages a Raymond Queneau pour metro 5 et bus 145/147/318.
-- Onglet Agenda: prototype "Semaine compacte" avec 7 jours et 2 evenements maximum par jour.
-- Onglet ISS: position orbitale calculee a partir de TLE CelesTrak avec carte monde.
-- Onglet Air: simulation radar autour de Pantin, partagee par le site et l'API e-paper.
-- Onglet Reglages: configuration partagee des onglets visibles, de la preference d'onglet au demarrage et du carrousel.
-- API e-paper agregee: `/api/epaper/v1/state`.
+</div>
 
-Important: l'onglet Agenda est actuellement un prototype avec donnees statiques dans `app/page.tsx`. Il n'a pas encore de table D1 ni de synchronisation calendrier.
+---
 
-## Stack
+## Un écran utile au quotidien
 
-- Vinext + React 19 + TypeScript.
-- Vite 8 pour le dev/build.
-- Cloudflare Worker via ChatGPT Sites.
-- Cloudflare D1 pour la persistance.
-- Drizzle ORM pour les tables applicatives.
-- `satellite.js` pour le calcul de position ISS.
-- CSS global dans `app/globals.css`, sans design system externe.
+**Friiigooo** est un tableau de bord familial conçu pour un **LILYGO T5 e-paper de 4,7 pouces**, installé en portrait sur le réfrigérateur. Le navigateur permet de préparer et modifier les informations ; l’écran les rend accessibles à toute la famille, avec une navigation tactile.
 
-Scripts principaux:
+L’interface privilégie le contraste, les grandes zones tactiles et une mise en page **540 × 960** adaptée au papier électronique. Les noms `SUPERVIE` et `supervie` subsistent dans le code, les variables et certains libellés : ils désignent le même projet.
+
+> Le site publié est protégé par un code d’accès familial. Le code de démonstration local indiqué plus bas ne donne pas accès à la production.
+
+## Neuf onglets, un seul tableau de bord
+
+| Onglet | Ce qu’on y trouve |
+| --- | --- |
+| **🛒 Courses** | Plusieurs listes partagées, ajout de plusieurs articles à la fois, coches et nettoyage des articles achetés. |
+| **🧸 Crèche** | Préparation du départ et du retour, avec les prévisions météo. La liste de vêtements du firmware est fixe et signalée comme telle. |
+| **🌤 Météo** | Conditions actuelles à Pantin, températures du jour, douze heures de prévisions et aperçu du lendemain. |
+| **🍽 Repas** | Planning hebdomadaire, déjeuner et dîner, modifiable depuis le web. |
+| **🚇 Métro** | Prochains passages autour de Raymond Queneau : métro **5**, bus **145**, **147** et **318**, selon la disponibilité du fournisseur. |
+| **📅 Agenda** | Événements persistants : date, heure, catégorie et durée, avec une vue adaptée à l’e-paper. |
+| **🛰 ISS** | Position calculée de la Station spatiale internationale et trajectoires passée et future sur une carte du monde. |
+| **✈️ Air** | **Simulation** de trafic aérien pour le radar — ce n’est pas une source ADS-B réelle. |
+| **⛴ Bateaux** | Signaux AIS reçus sur le canal de l’Ourcq, avec distance, direction et estimation d’arrivée quand les données le permettent. |
+
+Les **réglages** permettent de choisir les onglets visibles, la préférence de démarrage et le carrousel. Ils sont enregistrés côté serveur et partagés entre les navigateurs.
+
+### Web et écran : qui pilote quoi ?
+
+- Choisir un onglet sur le web change la vue du navigateur et la préférence de **prochain démarrage** de l’écran.
+- L’écran déjà allumé conserve sa navigation tactile et son carrousel.
+- Si son onglet actif devient masqué dans les réglages, il passe à un onglet visible.
+- Deux modifications concurrentes des réglages sont contrôlées par révision : une écriture obsolète est refusée, plutôt que d’écraser silencieusement la précédente.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Web["Navigateur\nGestion et consultation"] --> API["Site Friiigooo\nAPI Cloudflare Worker"]
+    Screen["LILYGO T5\nFirmware e-paper"] -->|"Snapshot JSON et actions Courses"| API
+    API <--> DB[("Cloudflare D1\nListes, repas, agenda, réglages")]
+    API --> Weather["MET Norway · Open-Meteo"]
+    API --> Transit["Île-de-France Mobilités PRIM"]
+    API --> ISS["CelesTrak · Where the ISS at"]
+    API --> Boats["AISStream"]
+```
+
+Le site est à la fois l’application web et le serveur de l’écran. Le firmware consomme le snapshot **`/api/epaper/v1/state`** ; il ne se connecte pas directement à AISStream et ne contient pas sa clé.
+
+| Couche | Technologies |
+| --- | --- |
+| Interface | React 19, TypeScript, CSS, conventions App Router |
+| Développement et compilation | Vinext, Vite |
+| Serveur et hébergement | Cloudflare Workers, ChatGPT Sites |
+| Persistance | Cloudflare D1, Drizzle et migrations SQL |
+| Calcul orbital | `satellite.js` |
+| Validation | Node Test Runner, Playwright, Wrangler/Miniflare |
+| Firmware, dans sa branche dédiée | Arduino/C++, PlatformIO, environnement `T5-ePaper-S3` |
+
+## Deux branches, deux projets
+
+| Branche GitHub | Contenu |
+| --- | --- |
+| [`main`](https://github.com/broduoliviercontact-web/liste-frigo/tree/main) | Application web, API, migrations et tests du site. **Ce README décrit cette branche.** |
+| [`firmware/liste-frigo-epaper`](https://github.com/broduoliviercontact-web/liste-frigo/tree/firmware/liste-frigo-epaper) | Firmware, SDK LilyGo, instructions matérielles et contrat e-paper. |
+
+> **Ne pas fusionner la branche firmware dans `main`.** Les deux branches ont des historiques Git distincts. Utiliser deux répertoires de travail séparés.
+
+Documentation côté écran :
+
+- [Prise en main et consignes firmware](https://github.com/broduoliviercontact-web/liste-frigo/blob/firmware/liste-frigo-epaper/examples/liste_frigo/AI_HANDOFF.md)
+- [Contrat de l’API e-paper](https://github.com/broduoliviercontact-web/liste-frigo/blob/firmware/liste-frigo-epaper/examples/liste_frigo/EPAPER_API_CONTRACT.md)
+- [Boîtier magnétique](https://github.com/broduoliviercontact-web/liste-frigo/tree/firmware/liste-frigo-epaper/shell/fridge-magnetic-case)
+
+## Démarrer en local
+
+### Prérequis
+
+- **Node.js 22.13 ou supérieur**, avec npm.
+- Git.
+- Chromium pour les tests navigateur, installé avec Playwright ci-dessous.
 
 ```bash
-npm install
-npm run dev
-npm run build
-npm run lint
-npm test
-```
-
-En local, le code d'acces par defaut est `supervie` si `SUPERVIE_ACCESS_CODE` n'est pas defini.
-
-## Architecture des dossiers
-
-```text
-app/
-  page.tsx                         UI principale et tous les onglets
-  globals.css                      Style e-paper/web
-  layout.tsx                       Metadata et layout racine
-  access.ts                        Auth par code partage
-  api/
-    access/route.ts                Login par code + cookie
-    lists/route.ts                 CRUD listes/articles
-    meals/route.ts                 CRUD repas hebdo
-    transit/route.ts               API IDFM PRIM + cache D1
-    iss/route.ts                   Position ISS via CelesTrak + satellite.js
-    epaper/v1/weather.ts           Meteo Pantin via MET Norway + Open-Meteo
-    epaper/v1/state/route.ts       Snapshot complet pour firmware e-paper
-db/
-  schema.ts                        Tables Drizzle
-  index.ts                         Binding D1 -> Drizzle
-drizzle/
-  *.sql                            Migrations versionnees
-public/
-  avatars/                         Images Cesar pour l'onglet Creche
-  wardrobe/                        Calques graphiques existants
-worker/
-  index.ts                         Worker custom, notamment proxy image
-build/
-  sites-vite-plugin.ts             Plugin local Sites/Vite
-scripts/
-  build-verified.sh                Build + verification artefact Sites
-  validate-artifact.sh             Validation Worker/hosting
-tests/
-  rendered-html.test.mjs           Smoke test HTML rendu
-.openai/
-  hosting.json                     Configuration ChatGPT Sites
-```
-
-## Modele UI
-
-Tout est centralise dans `app/page.tsx`.
-
-Types importants:
-
-- `TabId`: identifiants internes des onglets web.
-- `EpaperSettings`: preferences locales de navigation e-paper.
-- `ShoppingList` / `Item`: donnees de listes.
-- `Meal`: repas midi/soir.
-- `IssState`, `EpaperWeather`, `TransitLine`: formes consommees par les vues.
-
-Le catalogue d'onglets est `tabCatalog`. Chaque entree contient:
-
-- `id`: identifiant React.
-- `label`: libelle affiche.
-- `icon`: pictogramme monochrome/grayscale.
-- `epaperKey`: cle envoyee au firmware.
-- `epaper`: indique si l'onglet peut apparaitre dans la navigation e-paper.
-
-La barre du bas est rendue par `AppNav`. Elle utilise `epaperSettings.visibleTabs`, limitee a `MAX_EPAPER_TABS = 9`. Le style dynamique compacte les libelles et les pictogrammes pour garder les neuf onglets lisibles sur 540 px.
-
-Les reglages sont caches dans `localStorage` sous `supervie-epaper-settings` pour rester affichables hors ligne, puis enregistres dans D1 via `/api/epaper-settings`. Les navigateurs relisent cette configuration toutes les 10 secondes. Une reponse de lecture demarree avant une modification locale est ignoree, afin de ne pas ecraser cette modification.
-
-Navigation partagee : choisir un onglet dans un navigateur modifie sa vue locale et enregistre `activeTab`/`preferredTab` pour le prochain demarrage de l'ecran. Cela ne force pas l'ecran deja allume a changer d'onglet : le firmware conserve sa navigation tactile et son carrousel entre deux rafraichissements. En revanche, si un navigateur masque l'onglet actuellement affiche par l'ecran, le firmware bascule vers une page visible. Deux navigateurs qui sauvegardent simultanement les reglages suivent actuellement la regle du dernier enregistrement gagne.
-
-## Onglets
-
-`Listes`
-
-- Source: `/api/lists`.
-- Rafraichissement web: toutes les 5 secondes.
-- Protection contre ecrasement d'une mutation locale via `mutationInFlight` et `listRevision`.
-- Les emojis d'articles sont determines cote client par `emojiFor`.
-
-`Creche`
-
-- Source meteo: `useEpaperWeather()` -> `/api/epaper/v1/state`.
-- Choisit un scenario visuel selon la temperature et le code meteo.
-- Images dans `public/avatars/`.
-
-`Meteo`
-
-- Source: `/api/epaper/v1/state`, champ `pages.meteo`.
-- Affiche actuel, min/max, 12 previsions horaires, demain.
-
-`Repas`
-
-- Source: `/api/meals`.
-- Table persistante: `meal_plans`.
-- Deux slots par jour: `midi` et `soir`.
-- L'overlay "Toute la semaine" existe deja pour voir les 7 jours.
-
-`Metro`
-
-- Source: `/api/transit`.
-- Favoris codifies dans `app/api/transit/route.ts`.
-- Cache memoire + snapshot D1 pour resister aux limites ou echecs PRIM.
-- Chaque ligne garde jusqu'a 3 passages par direction.
-
-`Agenda`
-
-- Source: `/api/agenda`.
-- Table persistante: `agenda_events`.
-- Edition web: choix du jour, creation, modification et suppression d'evenements.
-- Champs: date, heure optionnelle, titre, categorie, duree optionnelle.
-- Affichage e-paper: 7 colonnes, 2 evenements maximum par jour, focus sur les 2 prochains evenements.
-
-`ISS`
-
-- Source: `/api/iss`.
-- TLE: CelesTrak, avec fallback embarque si indisponible.
-- Calcul local Worker via `satellite.js`.
-- Track actuel + 6 points futurs, espaces de 6 minutes.
-
-`Air`
-
-- Source commune: `/api/air`.
-- Simulation dynamique recalculee toutes les 10 secondes.
-- Le site et `/api/epaper/v1/state` lisent maintenant la meme source, donc les avions, positions et metadonnees doivent rester alignes.
-- Sert surtout a tester radar, selection et densite visuelle en attendant une vraie source ADS-B.
-- A remplacer par une vraie source ADS-B si besoin.
-
-`Reglages`
-
-- Vue web, non exposee au firmware comme onglet e-paper.
-- Modifie `visibleTabs`, `activeTab`, `carouselEnabled`, `carouselIntervalSeconds`.
-- Affiche un JSON compatible avec la forme attendue par le firmware.
-
-## API
-
-Toutes les API applicatives sont protegees par le code SUPERVIE, sauf mecanisme d'acces lui-meme.
-
-Auth:
-
-- Header accepte: `x-supervie-access-code`.
-- Cookie: `supervie_access`.
-- Variable de production attendue: `SUPERVIE_ACCESS_CODE`.
-- En dev: fallback `supervie`.
-
-Routes:
-
-```text
-GET  /api/access
-POST /api/access
-
-GET  /api/lists
-POST /api/lists
-
-GET  /api/meals
-POST /api/meals
-
-GET  /api/transit
-GET  /api/iss
-GET  /api/epaper/v1/state
-```
-
-Actions supportees par `POST /api/lists`:
-
-- `createList`
-- `renameList`
-- `deleteList`
-- `addItem`
-- `addItems`
-- `toggleItem`
-- `deleteItem`
-- `clearChecked`
-
-`POST /api/meals` attend:
-
-```json
-{
-  "date": "2026-09-09",
-  "moment": "midi",
-  "label": "Pates au pesto"
-}
-```
-
-Une chaine vide supprime le repas du creneau.
-
-## Contrat e-paper
-
-Le firmware consomme principalement:
-
-```text
-GET /api/epaper/v1/state?listId=<id>
-Header: x-supervie-access-code: <code>
-```
-
-La route agrege en parallele:
-
-- listes D1,
-- meteo Pantin,
-- repas de la semaine,
-- agenda de la semaine,
-- transports,
-- ISS,
-- air simule via `/api/air`.
-
-Elle renvoie un snapshot JSON avec:
-
-- `schemaVersion`
-- `generatedAt`
-- `display`
-- `activeTab`
-- `epaperSettings`
-- `selectedListId`
-- `pages.listes`
-- `pages.meteo`
-- `pages.repas`
-- `pages.metro`
-- `pages.agenda`
-- `pages.iss`
-- `pages.air`
-
-`/api/epaper/v1/state` renvoie les neuf onglets visibles par defaut, dont
-`bateaux`. Les reglages e-paper sont partages entre navigateurs et firmware ;
-l'interface les relit periodiquement depuis le serveur.
-
-## Base de donnees
-
-Tables Drizzle versionnees:
-
-- `shopping_lists`
-- `shopping_items`
-- `meal_plans`
-- `agenda_events`
-- `app_settings` (reglages e-paper)
-- `transit_snapshots`
-
-Les migrations Drizzle sont la source de verite pour une nouvelle base. Les
-routes conservent `CREATE TABLE IF NOT EXISTS` comme filet de securite pour les
-anciens environnements, mais un deploiement doit appliquer les migrations avant
-de servir le trafic.
-
-Le binding D1 s'appelle `DB` et est declare dans `.openai/hosting.json`.
-
-## Protection de la connexion
-
-Le limiteur applicatif D1 partage un compteur atomique entre Workers : **120
-vérifications du code partagé par fenêtre fixe d’une minute**. Il couvre le
-formulaire, les anciens cookies contenant le code et l’en-tête du firmware.
-Il ne fait confiance à aucun en-tête IP fourni par le client. Au plafond : HTTP
-429 et Retry-After jusqu’à la fenêtre suivante ; si D1 échoue, accès refusé.
-
-Une connexion réussie crée désormais une session aléatoire de 256 bits, valable
-30 jours, dans un cookie HttpOnly/SameSite=Strict (Secure en HTTPS). Seule son
-empreinte liée au code configuré est conservée dans D1 ; changer le code révoque
-les sessions. Les sessions établies ne consomment pas le quota d’essais et restent
-utilisables lorsqu’il est épuisé. Le contrôle d’accès au chargement convertit un
-ancien cookie valide en session puis efface l’ancien cookie contenant le code.
-
-Le quota global peut encore retarder une nouvelle connexion ou une requête d’un
-firmware utilisant directement le code partagé. Une protection WAF par IP
-vérifiée reste complémentaire ; aucune règle externe n’est déclarée active.
-Les migrations additives `0007_true_leopardon.sql` et
-`0008_glossy_radioactive_man.sql` doivent précéder la publication. Le déploiement
-Sites applique les migrations incluses dans l’artefact.
-
-Limites applicatives:
-
-- 40 listes maximum.
-- 200 articles maximum par liste.
-- Libelle article coupe a 160 caracteres.
-- Nom de liste coupe a 80 caracteres.
-- Repas coupe a 100 caracteres.
-
-## Variables et services externes
-
-Variables attendues en production:
-
-- `SUPERVIE_ACCESS_CODE`: code partage pour web + firmware.
-- `IDFM_PRIM_API_KEY`: cle Ile-de-France Mobilites PRIM pour les transports.
-
-Services externes:
-
-- MET Norway: previsions meteo.
-- Open-Meteo: conditions actuelles pluie/temperature.
-- Ile-de-France Mobilites PRIM: prochains passages.
-- CelesTrak: TLE ISS.
-
-Les routes meteo/transit/ISS ont des caches ou fallbacks pour eviter de casser l'interface en cas d'echec fournisseur.
-
-## Deploiement
-
-Le site est gere par ChatGPT Sites.
-
-Fichier cle:
-
-```json
-{
-  "d1": "DB",
-  "project_id": "appgprj_6a7b7926b3948191beaeae9c0751324f",
-  "r2": null
-}
-```
-
-Le workflow utilise:
-
-```bash
-npm run build
-```
-
-Le script `scripts/build-verified.sh` construit l'application et verifie que l'artefact Worker Sites est valide.
-
-La publication recente a ete faite sur:
-
-- URL: <https://liste-frigo.pliskain.chatgpt.site>
-- Branche GitHub: `main`
-- Commit Agenda: `e3486c0` (`Prototype compact agenda tab`)
-
-## Repo firmware lie
-
-Le firmware LILYGO est dans le workspace voisin:
-
-```text
-/Users/jeanclaude/Documents/LilyGo-EPD47
-```
-
-Branche GitHub de publication firmware:
-
-```text
-firmware/liste-frigo-epaper
-```
-
-Derniere publication firmware connue:
-
-```text
-63cd1a3 Add configurable e-paper tabs and enclosure
-```
-
-Points firmware deja ajoutes:
-
-- navigation e-paper configurable,
-- pages ISS et Air,
-- carrousel,
-- OTA via `supervie-epaper.local`,
-- contrat API documente dans `examples/liste_frigo/EPAPER_API_CONTRACT.md`,
-- modele OpenSCAD de boitier magnetique dans `shell/fridge-magnetic-case/`.
-
-Attention: le firmware supporte actuellement les cles `listes`, `creche`, `meteo`, `repas`, `metro`, `reglages`, `iss`, `air`. Pour ajouter `agenda`, il faudra modifier les enums, le parsing API, le rendu et la navigation firmware.
-
-## Ajouter un nouvel onglet
-
-Etapes cote site:
-
-1. Ajouter l'identifiant dans le type `TabId`.
-2. Ajouter une entree dans `tabCatalog`.
-3. Decider si `epaper: true` ou seulement web.
-4. Creer un composant `XPage`.
-5. Ajouter la branche de rendu dans le gros ternaire de `Home`.
-6. Ajouter les styles dans `app/globals.css`.
-7. Si l'onglet doit aller sur le firmware, ajouter sa cle dans `/api/epaper/v1/state`.
-8. Mettre a jour le firmware dans le repo LILYGO.
-
-Points UX pour e-paper:
-
-- Eviter les paragraphes.
-- Garder des blocs stables en taille.
-- Limiter le nombre d'informations simultanees.
-- Preferer 3 a 7 elements forts plutot qu'une page exhaustive.
-- Tester en 540 x 960 et en mobile plein ecran.
-
-## Backlog recommande
-
-Priorite haute:
-
-- Porter le rendu Agenda dans le firmware.
-- Ajouter des evenements recurrents si le besoin apparait.
-
-Priorite moyenne:
-
-- Rendre les reglages e-paper persistants cote serveur au lieu du seul `localStorage`.
-- Ajouter une page statut technique: derniere synchro, batterie, Wi-Fi, version firmware.
-- Remplacer la simulation Air par une vraie source ADS-B si l'onglet devient un outil temps reel.
-- Ajouter des tests d'API pour les actions listes/repas.
-
-Dette technique:
-
-- `app/page.tsx` est devenu tres long. Une reprise serieuse devrait extraire les onglets dans `app/components/` ou `components/`.
-- Certaines tables sont creees au runtime par prudence. A terme, tout devrait passer par migrations Drizzle explicites.
-- Le contrat e-paper devrait avoir un fichier de types partage ou un schema JSON.
-- Les reglages `activeTab` web et `activeTab` firmware sont proches mais pas parfaitement unifies.
-
-## Bateaux / AIS
-
-L'onglet **Bateaux** suit les signaux AIS reçus par [AISStream](https://aisstream.io/) sur une petite zone du canal de l'Ourcq autour du métro Raymond-Queneau. La connexion WebSocket et la clé restent exclusivement côté serveur. La zone et le point « Chez nous » sont centralisés dans `server/services/aisService.ts`.
-
-Configurer `AISSTREAM_API_KEY` avec une clé AISStream. Pour tester l'API, le site et l'écran sans clé, utiliser `BOATS_USE_MOCK=true`. La route légère consommée par le site est `GET /api/boats`; l'état e-paper expose les mêmes données dans `pages.bateaux`.
-
-En développement Cloudflare local, copier `.env.example` vers `.dev.vars`, puis adapter les valeurs avant `npm run dev:local`. Cette commande applique les migrations uniquement à la base Miniflare sous `.wrangler/state`, puis démarre Vite. Elle ne contacte jamais D1 distant. L'émulateur Vite/Cloudflare peut refuser la sortie WebSocket vers AISStream : dans ce cas l'API reste disponible avec `status: "degraded"`; utiliser `BOATS_USE_MOCK=true` pour valider l'interface locale, puis tester le flux réel sur le Worker hébergé.
-
-Tous les petits bateaux et toutes les péniches ne disposent pas nécessairement d'un émetteur AIS. Sur l'hébergement Cloudflare actuel, une seule collecte WebSocket est partagée dans chaque instance active et relancée par les lectures de l'API avec backoff. Une connexion permanente et une unicité mondiale stricte nécessiteraient un Durable Object.
-
-## Commandes utiles
-
-Dev local:
-
-```bash
+git clone --branch main --single-branch https://github.com/broduoliviercontact-web/liste-frigo.git
+cd liste-frigo
+npm ci
+cp .env.example .dev.vars
 npm run dev:local
 ```
 
-Build production:
+Ouvrir l’adresse affichée par Vite dans le terminal. Le code d’accès du mode local est **`supervie`**.
 
-```bash
-npm run build
-```
+`dev:local` applique les migrations à une **base D1 locale**, puis lance Vite/Miniflare. Les réglages de développement utilisent des sources contrôlées : certaines pages externes sont indisponibles et les bateaux peuvent être simulés. Ces valeurs ne sont pas intégrées à l’artefact de production.
 
-Lint:
+**Utiliser le runtime Cloudflare local.** `npm start` / `vinext start` sous Node seul ne fournit pas les bindings `cloudflare:workers` et D1 nécessaires aux API. Ne pas lancer non plus `worker/index.ts` directement avec Wrangler avant compilation : il dépend de modules virtuels Vinext.
+
+### Configuration
+
+Les variables sensibles vont dans **`.dev.vars` en local** et dans les secrets de l’hébergement en production. Ne jamais les placer dans le README, les sources ou une capture de logs.
+
+| Variable | Usage |
+| --- | --- |
+| `SUPERVIE_ACCESS_CODE` | Code partagé utilisé pour l’accès familial et l’authentification du firmware. |
+| `IDFM_PRIM_API_KEY` | Accès aux prochains passages Île-de-France Mobilités. |
+| `AISSTREAM_API_KEY` | Accès au flux AIS des bateaux, exclusivement côté serveur. |
+| `BOATS_USE_MOCK` | Active les bateaux simulés pour le développement. |
+| `SUPERVIE_LOCAL_MOCKS` | Active les réponses e-paper contrôlées du mode local. |
+
+Le mode local est défini dans [vite.config.ts](vite.config.ts). Pour tester les fournisseurs réels, adapter explicitement cette configuration et les secrets ; renseigner une clé ne désactive pas à lui seul tous les mocks.
+
+## Des actions Courses qui résistent aux coupures
+
+Une action est enregistrée dans le navigateur **avant** son premier envoi. Si la réponse est perdue, elle peut être reprise avec sa clé initiale, y compris après rechargement.
+
+- **Côté serveur :** clé, écriture et résultat métier sont réunis dans un batch D1 atomique. Dans la fenêtre de conservation, rejouer une clé avec le même contenu ne répète pas l’écriture ; un contenu différent produit un conflit.
+- **Entre onglets :** Web Locks protège le journal partagé et coordonne les reprises.
+- **Session expirée :** retour au formulaire, puis reprise après reconnexion.
+- **Limitation `429` :** respect de `Retry-After`, avec au maximum trois reprises automatiques après l’envoi initial.
+- **Refus métier :** raison visible et absence de reprise automatique.
+- **Après 24 h :** une action expirée est conservée comme résultat inconnu, à vérifier avant de la refaire.
+
+La garantie suppose un stockage navigateur fonctionnel et Web Locks. Si ces fonctions manquent, les mutations sont bloquées explicitement. Effacer manuellement le stockage supprime aussi le journal de reprise.
+
+**Capacité : 40 listes et 200 articles par liste**, contrôlée sous concurrence. Un import qui dépasse la place disponible est refusé sans insertion partielle.
+
+## Des données fraîches, ou un état explicite
+
+| Source | Comportement |
+| --- | --- |
+| **Métro** | Un snapshot de plus de 20 minutes n’est pas une donnée courante. Les passages périmés sont filtrés ; l’e-paper ne transforme pas un délai négatif en faux départ « À quai ». |
+| **ISS** | CelesTrak est prioritaire ; [Where the ISS at](https://wheretheiss.at/w/developer) sert de secours. Les éléments orbitaux de plus de 48 h sont refusés. La position reste un calcul orbital, pas une mesure GPS en direct. |
+| **Météo** | Prévisions MET Norway et conditions Open-Meteo, avec repli et temporisation après limitation fournisseur. |
+| **Bateaux** | Seuls les signaux AIS reçus dans la zone sont visibles. « Aucun bateau » ne garantit pas l’absence de bateau sur le canal. |
+| **Snapshot e-paper** | Les sources sont agrégées avec des délais bornés : une panne externe ne doit pas rendre toutes les pages indisponibles. |
+
+Les caches mémoire et certaines temporisations sont propres à chaque Worker. Ils ne constituent pas une coordination mondiale des quotas fournisseurs. La collecte AIS n’est pas garantie permanente ; une telle évolution demanderait une architecture dédiée.
+
+## Accès et sécurité
+
+Une connexion réussie crée une session aléatoire de **256 bits**, valable **30 jours**, dans un cookie `HttpOnly`, `SameSite=Strict` et `Secure` en HTTPS. D1 conserve son empreinte liée au code configuré ; changer ce code invalide les sessions existantes. Les anciens cookies contenant le code sont convertis au contrôle d’accès du navigateur.
+
+Les vérifications du code partagé sont limitées par D1 à **120 par fenêtre fixe d’une minute**, tous clients confondus. Les sessions navigateur déjà établies ne consomment pas ce quota.
+
+**Limite connue :** son épuisement peut encore retarder une nouvelle connexion ou une requête du firmware qui utilise directement le code. Aucune règle WAF par IP n’est déclarée active dans ce dépôt.
+
+Ce projet utilise un accès familial partagé, sans comptes individuels ni rôles par personne.
+
+## Tester le projet
 
 ```bash
 npm run lint
+npx tsc --noEmit --incremental false
+npm test
+npm run test:idempotency
+npm run test:reliability
 ```
 
-Tests:
+`npm test` inclut la compilation de production. Les suites d’intégration démarrent un Worker avec une base D1 locale jetable et appliquent les migrations.
+
+Pour les parcours navigateur :
 
 ```bash
-npm test
+npx playwright install chromium
+npm run test:browser:lost-response
+npm run test:browser:reauth
+npm run test:browser:rejected
+npm run test:browser:rate-limit-seconds
+npm run test:browser:rate-limit-additional
+npm run test:browser:multi-tab
+npm run test:browser:journal-limits
+npm run test:browser:settings-keyboard
 ```
 
-Migration Drizzle:
+**Exécuter ces suites successivement**, car elles reconstruisent le même répertoire `dist/`. Elles couvrent notamment la perte de réponse après écriture, la reprise après rechargement, deux onglets, les refus métier, les délais de reprise, le stockage indisponible et le clavier dans les dialogues de listes.
+
+Les tests navigateur utilisent Chromium. Une compilation firmware ou un test automatisé ne remplace pas les essais physiques : tactile, rendu e-paper, coupure Wi-Fi et redémarrage pendant une opération.
+
+## Repères dans le code
+
+```text
+app/
+  page.tsx                      Interface et onglets
+  access.ts                     Sessions et authentification
+  access-limit.ts               Limiteur partagé D1
+  pending-list-mutations.ts     Journal durable du navigateur
+  client-mutation-queue.ts      Sérialisation des actions
+  api/
+    lists/                      Listes et articles
+    meals/                      Planning des repas
+    agenda/                     Événements persistants
+    epaper-settings/            Réglages partagés et révisions
+    transit/                    PRIM, cache et fraîcheur
+    iss/                        Éléments orbitaux et trajectoires
+    boats/                      API des bateaux
+    epaper/v1/                  Agrégation et météo
+    version/                    Identifiant de version du site
+db/schema.ts                    Schéma Drizzle
+drizzle/                        Migrations SQL et métadonnées
+tests/                          Tests unitaires, HTTP/D1 et navigateur
+server/services/aisService.ts    Collecte et calculs AIS
+public/                         Images et ressources statiques
+worker/index.ts                 Entrée Cloudflare Worker
+.openai/hosting.json             Identité et bindings du site existant
+```
+
+### API principale
+
+Les routes applicatives sont authentifiées. Le firmware utilise l’en-tête `x-supervie-access-code` ; le navigateur utilise sa session.
+
+| Route | Rôle |
+| --- | --- |
+| `GET / POST /api/access` | Vérification de session et connexion. |
+| `GET / POST /api/lists` | Lecture et mutations Courses. |
+| `GET / POST /api/meals` | Planning hebdomadaire des repas. |
+| `GET / POST /api/agenda` | Agenda et disposition. |
+| `GET / POST /api/epaper-settings` | Réglages ; les écritures exigent une `revision`. |
+| `GET /api/transit` | Départs des transports. |
+| `GET /api/iss` | Position et trajectoires orbitales. |
+| `GET /api/air` | Trafic aérien simulé. |
+| `GET /api/boats` | Bateaux AIS et état de collecte. |
+| `GET /api/epaper/v1/state?listId=<id>` | Snapshot consommé par l’écran. |
+| `GET /api/version` | Diagnostic de version du site. |
+
+Les mutations Courses utilisent l’en-tête **`x-supervie-mutation-id`**. Actions disponibles : `createList`, `renameList`, `deleteList`, `addItem`, `addItems`, `toggleItem`, `deleteItem`, `clearChecked`.
+
+## Base de données et publication
+
+D1 est exposé sous le binding **`DB`**. Les migrations versionnent les listes, articles, repas, événements, réglages, snapshots transit, clés d’idempotence, compteurs d’accès et sessions.
+
+Pour faire évoluer le schéma :
 
 ```bash
 npm run db:generate
+npm run db:migrate:local
+npm run build
 ```
 
-Etat Git:
+- Générer une **migration additive** ; ne pas réécrire les migrations historiques déjà appliquées.
+- Tester une base locale vide et la conservation des données existantes.
+- Sur une ancienne base contenant déjà `agenda_events` sans migration `0002` enregistrée, inspecter schéma et historique avant toute intervention. Ne pas marquer cette migration comme appliquée aveuglément.
+- Le site existant est publié via **ChatGPT Sites** : conserver son identité dans `.openai/hosting.json`. Un clone destiné à une autre instance doit être enregistré avec sa propre identité d’hébergement.
+- La publication utilise l’artefact Worker construit et ses migrations. **Un push GitHub seul ne publie pas le site.**
+- Publier le site et flasher le firmware sont deux opérations distinctes.
 
-```bash
-git status --short --branch
-git log --oneline --decorate -8
-```
+## Contribuer
 
-## Notes pour la prochaine IA
+Pour un bug, préciser l’onglet, le comportement attendu, ce qui s’affiche réellement et si le problème concerne le web, l’écran ou les deux. Ajouter une reproduction et, si utile, une capture sans code d’accès ni données privées.
 
-- Ne pas supprimer `.openai/hosting.json`: il contient l'ID opaque du site Sites existant.
-- Ne pas changer le nom du binding D1 `DB` sans changer `db/index.ts` et la config Sites.
-- Ne pas stocker de secret dans le repo.
-- Le site public reste protege applicativement par code SUPERVIE.
-- Le rendu web est aussi une maquette du firmware: garder la contrainte 540 x 960 en tete.
-- Les donnees Agenda sont volontairement fausses pour l'instant: c'est un test de lisibilite.
-- Pour pousser sur GitHub, la branche source du site est `main` sur `https://github.com/broduoliviercontact-web/liste-frigo.git`.
+Pour une modification :
 
-## Fiabilisation locale du 11 septembre 2026
+1. Travailler dans la branche et le répertoire du composant concerné.
+2. Préserver le contrat JSON consommé par l’écran.
+3. Ajouter un test qui reproduit le défaut lorsqu’il s’y prête.
+4. Vérifier les tests concernés et documenter les limites restantes.
 
-- Les réglages GET renvoient `revision`. POST exige cette révision (428 sinon),
-  applique un patch et utilise une écriture conditionnelle atomique (409 si
-  conflit). Le navigateur sérialise ses intentions et ne renvoie que les
-  champs modifiés. Un ancien onglet doit être rechargé après publication.
-- ISS : époque TLE transmise, âge maximal choisi de 48 h, aucune constante
-  orbitale de secours ; en panne, cache encore valide explicitement dégradé,
-  sinon indisponible. Repli/tentatives espacés de 60 s par Worker.
-- Météo : Retry-After respecté, appels simultanés regroupés par Worker, source
-  de repli MET Norway signalée. Ce n’est pas un quota global du fournisseur.
-- Diagnostic protégé : GET `/api/version`, version affichée dans les réglages.
-- Validation ajoutée : `npm run test:reliability` et
-  `npm run test:browser:settings-keyboard`.
+Les prochaines améliorations possibles concernent notamment la protection d’accès par IP, la coordination des quotas externes, la compatibilité avec d’autres navigateurs et le découpage de l’interface principale en composants plus petits.
 
+---
 
-### Secours ISS
+<div align="center">
 
-CelesTrak reste prioritaire. Si cette source échoue ou renvoie des éléments trop
-anciens, le serveur essaie les TLE de [Where the ISS at](https://wheretheiss.at/w/developer).
-Chaque connexion est limitée à 4 secondes pour rester dans le budget du snapshot.
-Les mêmes contrôles ISS/âge maximal de 48 h s’appliquent aux deux sources ; les
-trajectoires passée et future sont calculées depuis les éléments acceptés. Le
-secours est signalé par `degraded`, sans trajectoire fictive en cas de double panne.
+**Friiigooo — les informations de la maison, à portée de main.**
+
+</div>
