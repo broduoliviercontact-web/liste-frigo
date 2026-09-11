@@ -1,15 +1,13 @@
+import { freshTle, tleEpoch } from "../source-policy";
 import { requireSupervieAccess } from "../../access";
 import { fetchWithTimeout } from "../fetch-with-timeout";
 import { degreesLat, degreesLong, eciToGeodetic, gstime, propagate, twoline2satrec } from "satellite.js";
 
 const TLE_URL = "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE";
 const TLE_CACHE_MS = 6 * 60 * 60 * 1000;
-const FALLBACK_TLE = [
-  "1 25544U 98067A   26251.98227461  .00013495  00000+0  25209-3 0  9997",
-  "2 25544  51.6292 245.3706 0004854 110.6068 249.5441 15.49061543584742",
-] as const;
-
 let tleCache: { lines: readonly [string, string]; expiresAt: number } | null = null;
+let retryAt = 0;
+let loading: Promise<readonly [string, string]> | null = null;
 
 function describePosition(latitude: number, longitude: number) {
   if (latitude < -60) return "Région antarctique";
@@ -29,8 +27,12 @@ function describePosition(latitude: number, longitude: number) {
   return "Au-dessus de la Terre";
 }
 
-async function readTle() {
-  if (tleCache && tleCache.expiresAt > Date.now()) return tleCache.lines;
+async function fetchTle() {
+  if (tleCache && freshTle(tleEpoch(tleCache.lines[0])) && tleCache.expiresAt > Date.now()) return tleCache.lines;
+  if (Date.now() < retryAt) {
+    if (tleCache && freshTle(tleEpoch(tleCache.lines[0]))) return tleCache.lines;
+    throw new Error("Éléments orbitaux ISS indisponibles ou périmés");
+  }
   try {
     const response = await fetchWithTimeout(TLE_URL, {
       headers: { Accept: "text/plain" },
@@ -41,13 +43,21 @@ async function readTle() {
     const line1 = lines.find((line) => line.startsWith("1 25544"));
     const line2 = lines.find((line) => line.startsWith("2 25544"));
     if (!line1 || !line2) throw new Error("TLE ISS incomplet");
+    if (!freshTle(tleEpoch(line1))) throw new Error("Éléments orbitaux ISS périmés");
     const tle = [line1, line2] as const;
     tleCache = { lines: tle, expiresAt: Date.now() + TLE_CACHE_MS };
     return tle;
   } catch (error) {
     console.error(`ISS TLE unavailable: ${error instanceof Error ? error.message : String(error)}`);
-    return tleCache?.lines ?? FALLBACK_TLE;
+    retryAt = Date.now() + 60_000;
+    if (tleCache && freshTle(tleEpoch(tleCache.lines[0]))) return tleCache.lines;
+    throw new Error("Éléments orbitaux ISS indisponibles ou périmés");
   }
+}
+
+async function readTle() {
+  if (!loading) loading = fetchTle().finally(() => { loading = null; });
+  return loading;
 }
 
 function positionAt(line1: string, line2: string, date: Date) {
@@ -76,6 +86,9 @@ export async function readIss() {
   return {
     status: "ready" as const,
     updatedAt: now.toISOString(),
+    sourceUpdatedAt: new Date(tleEpoch(line1)).toISOString(),
+    sourceAgeSeconds: Math.round((now.getTime() - tleEpoch(line1)) / 1000),
+    degraded: Date.now() < retryAt,
     speedKmh: Math.round(current.velocity),
     over: describePosition(current.latitude, current.longitude),
     latitude: current.latitude,

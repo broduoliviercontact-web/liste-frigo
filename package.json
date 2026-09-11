@@ -11,7 +11,7 @@
     "dev:local": "npm run db:migrate:local && npm run dev",
     "build": "bash scripts/build-verified.sh",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "npm run build && node --experimental-strip-types --test tests/rendered-html.test.mjs tests/boats.test.ts tests/validation.test.ts tests/client-mutation-queue.test.ts tests/pending-list-mutations.test.ts tests/transit.test.mjs",
+    "test": "npm run build && node --experimental-strip-types --test tests/rendered-html.test.mjs tests/boats.test.ts tests/validation.test.ts tests/client-mutation-queue.test.ts tests/pending-list-mutations.test.ts tests/transit.test.mjs tests/source-policy.test.mjs",
     "test:transit": "node --test tests/transit.test.mjs",
     "test:idempotency": "node --test tests/idempotency.integration.mjs",
     "test:browser:lost-response": "node tests/lost-response.browser.mjs",
@@ -24,7 +24,9 @@
     "validate:artifact": "bash scripts/validate-artifact.sh",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
-    "db:migrate:local": "WRANGLER_LOG_PATH=.wrangler/wrangler.log wrangler d1 migrations apply site-creator-d1 --local --config wrangler.local.jsonc"
+    "db:migrate:local": "WRANGLER_LOG_PATH=.wrangler/wrangler.log wrangler d1 migrations apply site-creator-d1 --local --config wrangler.local.jsonc",
+    "test:reliability": "node --test tests/reliability.integration.mjs",
+    "test:browser:settings-keyboard": "node --test tests/settings-keyboard.browser.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

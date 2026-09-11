@@ -1,3 +1,4 @@
+import { retryDeadline } from "../../source-policy";
 // Approximate Pantin location used for local weather forecasts.
 import { fetchWithTimeout } from "../../fetch-with-timeout";
 const PANTIN_LATITUDE = 48.8924;
@@ -26,6 +27,8 @@ export type EpaperWeather = {
   location: "Pantin";
   timezone: "Europe/Paris";
   updatedAt?: string;
+  currentSource?: "open-meteo" | "met-no";
+  degraded?: boolean;
   current?: { time: string; temperature: number; weatherCode: number; isDay: boolean };
   today?: { min: number; max: number; weatherCode: number };
   tomorrow?: { date: string; min: number; max: number; weatherCode: number };
@@ -38,6 +41,9 @@ export type EpaperWeather = {
 
 let cachedWeather: EpaperWeather | null = null;
 let cacheExpiresAt = 0;
+let currentRetryAt = 0;
+let weatherRetryAt = 0;
+let loadingWeather: Promise<EpaperWeather> | null = null;
 
 function weatherCode(symbol = "cloudy") {
   if (symbol.includes("thunder")) return 95;
@@ -94,12 +100,14 @@ function nextForecastAtHour(points: MetNoPoint[], startTime: string, hour: numbe
 }
 
 async function readCurrentConditions() {
+  if (Date.now() < currentRetryAt) return null;
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${PANTIN_LATITUDE}&longitude=${PANTIN_LONGITUDE}&current=temperature_2m,precipitation,rain,showers,weather_code&timezone=Europe%2FParis&forecast_days=1`;
   try {
     const response = await fetchWithTimeout(url, {
       headers: { Accept: "application/json", "User-Agent": "SUPERVIE/1.0 contact@supervie.local" },
       cf: { cacheEverything: true, cacheTtl: 120 },
     } as RequestInit);
+    if (response.status === 429) currentRetryAt = retryDeadline(response.headers.get("retry-after"));
     if (!response.ok) throw new Error(`Open-Meteo HTTP ${response.status}`);
     return (await response.json() as OpenMeteoCurrentResponse).current ?? null;
   } catch (error) {
@@ -108,8 +116,9 @@ async function readCurrentConditions() {
   }
 }
 
-export async function readPantinWeather(): Promise<EpaperWeather> {
+async function fetchWeather(): Promise<EpaperWeather> {
   if (cachedWeather && Date.now() < cacheExpiresAt) return cachedWeather;
+  if (Date.now() < weatherRetryAt) return { status: "unavailable", location: "Pantin", timezone: "Europe/Paris" };
 
   try {
     const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${PANTIN_LATITUDE}&lon=${PANTIN_LONGITUDE}`;
@@ -118,6 +127,7 @@ export async function readPantinWeather(): Promise<EpaperWeather> {
       // Cloudflare keeps the provider response at the edge between e-paper polls.
       cf: { cacheEverything: true, cacheTtl: 900 },
     } as RequestInit);
+    if (response.status === 429) weatherRetryAt = retryDeadline(response.headers.get("retry-after"));
     if (!response.ok) throw new Error(`MET Norway HTTP ${response.status}`);
     const [data, currentConditions] = await Promise.all([
       response.json() as Promise<MetNoResponse>,
@@ -147,6 +157,8 @@ export async function readPantinWeather(): Promise<EpaperWeather> {
     const crecheReturn = nextForecastAtHour(points, current.time, 17);
     const weather: EpaperWeather = {
       status: "ready",
+      currentSource: currentConditions ? "open-meteo" : "met-no",
+      degraded: !currentConditions,
       location: "Pantin",
       timezone: "Europe/Paris",
       updatedAt: data.properties?.meta?.updated_at ?? new Date().toISOString(),
@@ -171,4 +183,9 @@ export async function readPantinWeather(): Promise<EpaperWeather> {
     console.error(`E-paper weather unavailable: ${message}`);
     return { status: "unavailable", location: "Pantin", timezone: "Europe/Paris" };
   }
+}
+
+export async function readPantinWeather(): Promise<EpaperWeather> {
+  if (!loadingWeather) loadingWeather = fetchWeather().finally(() => { loadingWeather = null; });
+  return loadingWeather;
 }

@@ -36,7 +36,11 @@ export function supportsPendingMutationLocks() {
 
 export function updatePendingListMutations(storage: Storage, update: (entries: PendingListMutation[]) => PendingListMutation[]) {
   return withLock("supervie-pending-list-mutations-journal", async () => {
-    const next = update(readPendingListMutations(storage).entries);
+    // A transform which adds or confirms a current operation must not erase an
+    // older uncertain operation merely because its server idempotency window
+    // expired. Expired entries are deliberately retained for an explicit user
+    // decision, never for automatic replay.
+    const next = update(parsePendingListMutations(storage));
     savePendingListMutations(storage, next);
     return next;
   });

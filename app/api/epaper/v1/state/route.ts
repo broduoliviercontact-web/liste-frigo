@@ -52,10 +52,10 @@ export async function GET(request: Request) {
       page("meals", readWeekMeals(), { monday: "", sunday: "", meals: [] }),
       page("transit", readTransit(), { status: "unavailable", updatedAt: "", lines: [] }),
       page("agenda", readWeekAgenda(), { layout: "horizontal", monday: "", sunday: "", today: "", eventCount: 0, events: [], upcoming: [], days: [] }),
-      page<{ status: "ready" | "unavailable"; updatedAt: string; speedKmh: number; over: string; latitude: number | null; longitude: number | null; altitudeKm: number | null; track: Array<{ latitude: number; longitude: number }>; pastTrack: Array<{ latitude: number; longitude: number }>; futureTrack: Array<{ latitude: number; longitude: number }> }>("iss", localMocks ? Promise.resolve(unavailableIss) : readIss(), unavailableIss),
+      page<{ status: "ready" | "unavailable"; updatedAt: string; sourceUpdatedAt?: string; sourceAgeSeconds?: number; degraded?: boolean; speedKmh: number; over: string; latitude: number | null; longitude: number | null; altitudeKm: number | null; track: Array<{ latitude: number; longitude: number }>; pastTrack: Array<{ latitude: number; longitude: number }>; futureTrack: Array<{ latitude: number; longitude: number }> }>("iss", localMocks ? Promise.resolve(unavailableIss) : readIss(), unavailableIss),
       page("air traffic", readAirTraffic(), await readAirTraffic(now)),
       page("boats", readBoats(), { status: "degraded" as const, updatedAt: now.toISOString(), route: BOATS_ROUTE, boats: [] }),
-      page("settings", readEpaperSettings(), DEFAULT_EPAPER_SETTINGS),
+      page("settings", readEpaperSettings(), { ...DEFAULT_EPAPER_SETTINGS, revision: 0 }),
     ]);
     const { value: lists } = listsResult;
     const { value: weather } = weatherResult;
@@ -122,6 +122,9 @@ export async function GET(request: Request) {
         iss: {
           status: iss.status,
           updatedAt: iss.updatedAt,
+          sourceUpdatedAt: iss.sourceUpdatedAt,
+          sourceAgeSeconds: iss.sourceAgeSeconds,
+          degraded: iss.degraded ?? false,
           speedKmh: iss.speedKmh,
           over: iss.over,
           latitude: iss.latitude,

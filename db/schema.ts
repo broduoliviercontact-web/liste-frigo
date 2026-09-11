@@ -60,3 +60,15 @@ export const listMutations = sqliteTable("list_mutations", {
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
 });
+
+// Shared across Workers; one bounded bucket for this family dashboard.
+export const accessAttempts = sqliteTable("access_attempts", {
+  key: text("key").primaryKey(),
+  windowStart: integer("window_start").notNull(),
+  count: integer("count").notNull(),
+});
+
+export const accessSessions = sqliteTable("access_sessions", {
+  tokenHash: text("token_hash").primaryKey(),
+  expiresAt: integer("expires_at").notNull(),
+}, (table) => [index("access_sessions_expiry_idx").on(table.expiresAt)]);

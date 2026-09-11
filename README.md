@@ -281,16 +281,25 @@ Le binding D1 s'appelle `DB` et est declare dans `.openai/hosting.json`.
 
 ## Protection de la connexion
 
-Le code d'acces est verifie par `POST /api/access`. Aucun limiteur distribue
-n'est active dans le code : la configuration d'hebergement expose D1, mais ni
-Durable Object ni regle WAF. Un compteur en memoire ou KV seul ne serait pas
-fiable entre instances. Avant publication, creer dans Cloudflare une regle WAF
-**Rate limiting** ciblee sur `POST` et le chemin `/api/access`, avec le client
-IP comme caracteristique de comptage, un seuil et une fenetre definis par le
-produit (par exemple 5 echecs en 10 minutes), puis une action `Managed
-Challenge` ou `Block` temporaire. Verifier que la zone de l'hebergement Sites
-permet cette regle et tester depuis deux adresses IP ; sans cette configuration,
-la protection distribuee contre les essais de code n'est pas active.
+Le limiteur applicatif D1 partage un compteur atomique entre Workers : **120
+vérifications du code partagé par fenêtre fixe d’une minute**. Il couvre le
+formulaire, les anciens cookies contenant le code et l’en-tête du firmware.
+Il ne fait confiance à aucun en-tête IP fourni par le client. Au plafond : HTTP
+429 et Retry-After jusqu’à la fenêtre suivante ; si D1 échoue, accès refusé.
+
+Une connexion réussie crée désormais une session aléatoire de 256 bits, valable
+30 jours, dans un cookie HttpOnly/SameSite=Strict (Secure en HTTPS). Seule son
+empreinte liée au code configuré est conservée dans D1 ; changer le code révoque
+les sessions. Les sessions établies ne consomment pas le quota d’essais et restent
+utilisables lorsqu’il est épuisé. Le contrôle d’accès au chargement convertit un
+ancien cookie valide en session puis efface l’ancien cookie contenant le code.
+
+Le quota global peut encore retarder une nouvelle connexion ou une requête d’un
+firmware utilisant directement le code partagé. Une protection WAF par IP
+vérifiée reste complémentaire ; aucune règle externe n’est déclarée active.
+Les migrations additives `0007_true_leopardon.sql` et
+`0008_glossy_radioactive_man.sql` doivent précéder la publication. Le déploiement
+Sites applique les migrations incluses dans l’artefact.
 
 Limites applicatives:
 
@@ -475,3 +484,18 @@ git log --oneline --decorate -8
 - Le rendu web est aussi une maquette du firmware: garder la contrainte 540 x 960 en tete.
 - Les donnees Agenda sont volontairement fausses pour l'instant: c'est un test de lisibilite.
 - Pour pousser sur GitHub, la branche source du site est `main` sur `https://github.com/broduoliviercontact-web/liste-frigo.git`.
+
+## Fiabilisation locale du 11 septembre 2026
+
+- Les réglages GET renvoient `revision`. POST exige cette révision (428 sinon),
+  applique un patch et utilise une écriture conditionnelle atomique (409 si
+  conflit). Le navigateur sérialise ses intentions et ne renvoie que les
+  champs modifiés. Un ancien onglet doit être rechargé après publication.
+- ISS : époque TLE transmise, âge maximal choisi de 48 h, aucune constante
+  orbitale de secours ; en panne, cache encore valide explicitement dégradé,
+  sinon indisponible. Repli/tentatives espacés de 60 s par Worker.
+- Météo : Retry-After respecté, appels simultanés regroupés par Worker, source
+  de repli MET Norway signalée. Ce n’est pas un quota global du fournisseur.
+- Diagnostic protégé : GET `/api/version`, version affichée dans les réglages.
+- Validation ajoutée : `npm run test:reliability` et
+  `npm run test:browser:settings-keyboard`.

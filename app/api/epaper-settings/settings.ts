@@ -35,18 +35,25 @@ async function settingsDb() {
 
 export async function readEpaperSettings() {
   const db = await settingsDb();
-  const row = await db.prepare("SELECT value FROM app_settings WHERE key = ?").bind("epaper_settings").first<{ value?: string }>();
+  const row = await db.prepare("SELECT value, updated_at FROM app_settings WHERE key = ?").bind("epaper_settings").first<{ value?: string; updated_at: number }>();
   try {
-    return normalizeEpaperSettings(row?.value ? JSON.parse(row.value) : null);
+    return { ...normalizeEpaperSettings(row?.value ? JSON.parse(row.value) : null), revision: row?.updated_at ?? 0 };
   } catch {
-    return normalizeEpaperSettings(null);
+    return { ...normalizeEpaperSettings(null), revision: row?.updated_at ?? 0 };
   }
 }
 
-export async function writeEpaperSettings(value: unknown) {
-  const settings = normalizeEpaperSettings(value);
+export async function writeEpaperSettings(value: unknown, revision: number) {
   const db = await settingsDb();
-  await db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
-    .bind("epaper_settings", JSON.stringify(settings), Date.now()).run();
-  return settings;
+  const current = await readEpaperSettings();
+  if (current.revision !== revision) return null;
+  const patch = value as Partial<EpaperSettings>;
+  const settings = normalizeEpaperSettings({ ...current, ...patch, carousel: { ...current.carousel, ...patch.carousel } });
+  const nextRevision = Math.max(Date.now(), revision + 1);
+  const json = JSON.stringify(settings);
+  const result = revision === 0
+    ? await db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('epaper_settings', ?, ?) ON CONFLICT(key) DO NOTHING").bind(json, nextRevision).run()
+    : await db.prepare("UPDATE app_settings SET value = ?, updated_at = ? WHERE key = 'epaper_settings' AND updated_at = ?").bind(json, nextRevision, revision).run();
+  if (result.meta.changes !== 1) return null;
+  return { ...settings, revision: nextRevision };
 }

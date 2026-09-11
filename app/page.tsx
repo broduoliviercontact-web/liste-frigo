@@ -1,5 +1,7 @@
 "use client";
 
+import { APP_VERSION } from "./version";
+import { useModalKeyboard } from "./use-modal-keyboard";
 import { CSSProperties, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { SerializedMutationQueue, isCurrentSettingsResponse } from "./client-mutation-queue";
 import { loadPendingListMutations, PENDING_LIST_MUTATION_TTL_MS, readPendingListMutations, supportsPendingMutationLocks, updatePendingListMutations, withPendingListMutationLock, type PendingListMutation } from "./pending-list-mutations";
@@ -37,6 +39,7 @@ type EpaperSettings = {
   configVersion: number;
 };
 type IssState = {
+  sourceUpdatedAt?: string; sourceAgeSeconds?: number; degraded?: boolean;
   status: "ready" | "unavailable";
   updatedAt?: string;
   speedKmh?: number;
@@ -799,15 +802,26 @@ function AgendaPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab
 
 function MetroPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: TabId) => void }) {
   const transit = useTransit();
-  const referenceTime = Date.parse(transit?.updatedAt ?? "") || 0;
-  const minutesUntil = (time: string) => Math.max(0, Math.round((Date.parse(time) - referenceTime) / 60_000));
-  const lines = [...(transit?.lines ?? [])].sort((a, b) => {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const minutesUntil = (time: string) => Math.max(0, Math.round((Date.parse(time) - now) / 60_000));
+  const currentLines = (transit?.lines ?? []).map((line) => ({
+    ...line,
+    passages: line.passages.filter((passage) => {
+      const departureAt = Date.parse(passage.time);
+      return Number.isFinite(departureAt) && departureAt >= now - 60_000;
+    }),
+  }));
+  const lines = [...currentLines].sort((a, b) => {
     const aTime = a.passages[0] ? Date.parse(a.passages[0].time) : Number.MAX_SAFE_INTEGER;
     const bTime = b.passages[0] ? Date.parse(b.passages[0].time) : Number.MAX_SAFE_INTEGER;
     return aTime - bTime;
   });
-  const activeLines = lines.filter((line) => line.available);
-  const unavailableLines = lines.filter((line) => !line.available);
+  const activeLines = lines.filter((line) => line.available && line.passages.length > 0);
+  const unavailableLines = lines.filter((line) => !line.available || line.passages.length === 0);
   const formatNext = (time: string) => {
     const minutes = minutesUntil(time);
     return minutes === 0 ? "À quai" : `${minutes} min`;
@@ -889,7 +903,7 @@ function IssPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
   const speed = typeof iss.speedKmh === "number" ? new Intl.NumberFormat("fr-FR").format(iss.speedKmh) : "—";
   const over = iss.over ?? "ISS indisponible";
   const updatedLabel = iss.updatedAt
-    ? `${iss.stale ? "Dernière position" : "Direct"} · ${new Intl.DateTimeFormat("fr-FR", { timeStyle: "medium" }).format(new Date(iss.updatedAt))} · ${iss.altitudeKm ?? "—"} km d'altitude`
+    ? `${iss.stale ? "Dernière position" : iss.degraded ? "Estimation sur source de repli" : "Position calculée"} · ${new Intl.DateTimeFormat("fr-FR", { timeStyle: "medium" }).format(new Date(iss.updatedAt))} · ${iss.altitudeKm ?? "—"} km d'altitude`
     : "Connexion à la station…";
   const coordinates = typeof iss.latitude === "number" && typeof iss.longitude === "number"
     ? `${Math.abs(iss.latitude).toFixed(2)}° ${iss.latitude >= 0 ? "N" : "S"} · ${Math.abs(iss.longitude).toFixed(2)}° ${iss.longitude >= 0 ? "E" : "O"}`
@@ -898,7 +912,7 @@ function IssPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab: T
     <header className="space-header"><div><p className="eyebrow">ORBITE BASSE</p><h1>ISS Tracker</h1></div><strong>{speed} km/h</strong></header>
     <section className="iss-readout">
       <div><span>Au-dessus de</span><strong>{over}</strong></div>
-      <p>{updatedLabel}<br />{coordinates}</p>
+      <p>{updatedLabel}<br />{coordinates}{iss.sourceUpdatedAt && <><br />Éléments orbitaux du {new Date(iss.sourceUpdatedAt).toLocaleString("fr-FR")}</>}</p>
     </section>
     <section className="world-panel" aria-label="Carte ISS">
       <svg viewBox="0 0 436 300" role="img" aria-label="Carte du monde et trajectoire prévue de l'ISS">
@@ -1220,7 +1234,7 @@ function SettingsPage({ settings, onSettings, onTab }: { settings: EpaperSetting
       <label><span>Délai</span><input type="number" min="30" step="30" value={settings.carouselIntervalSeconds} onChange={(event) => onSettings({ ...settings, carouselIntervalSeconds: Number(event.target.value) || 120 })} /></label>
     </section>
     <section className="settings-preview">
-      <p className="eyebrow">Contrat futur firmware</p>
+      <p className="eyebrow">Version {APP_VERSION}</p>
       <code>{JSON.stringify({ visibleTabs: settings.visibleTabs.map(epaperKeyFor), activeTab: epaperKeyFor(settings.activeTab), carousel: { enabled: settings.carouselEnabled, intervalSeconds: settings.carouselIntervalSeconds } }, null, 2)}</code>
     </section>
     <button className="back-to-screen" onClick={() => onTab(settings.activeTab)}>Retour à l&apos;écran</button>
@@ -1239,7 +1253,7 @@ function AccessGate({ onAuthorized }: { onAuthorized: () => void }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code }),
     });
-    if (!response.ok) { setError("Code incorrect"); return; }
+    if (!response.ok) { setError(response.status === 429 ? "Trop de tentatives : attendez une minute" : response.status === 503 ? "Connexion temporairement indisponible" : "Code incorrect"); return; }
     onAuthorized();
   }
 
@@ -1256,6 +1270,9 @@ export default function Home() {
   const [showAdd, setShowAdd] = useState(false);
   const [showLists, setShowLists] = useState(false);
   const [showFullList, setShowFullList] = useState(false);
+  const modalOpener = useRef<HTMLElement | null>(null);
+  const closeDialogs = useCallback(() => { setShowAdd(false); setShowLists(false); }, []);
+  useModalKeyboard(showAdd || showLists, closeDialogs, modalOpener);
   const [newItemsText, setNewItemsText] = useState("");
   const [newListName, setNewListName] = useState("");
   const [syncState, setSyncState] = useState<"loading" | "synced" | "error">("loading");
@@ -1265,10 +1282,11 @@ export default function Home() {
   const [access, setAccess] = useState<"checking" | "denied" | "granted">("checking");
   const listRevision = useRef(0);
   const settingsRevision = useRef(0);
+  const settingsQueue = useRef(new SerializedMutationQueue());
+  const settingsPending = useRef(0);
   // React may not re-render between two physical taps. Keep the intended
   // checkbox state separately so rapid taps still enqueue alternating writes.
   const pendingChecked = useRef(new Map<number, boolean>());
-  const retryMutationIds = useRef(new Map<string, string>());
   const pendingMutations = useRef<PendingListMutation[]>([]);
   const retryTimers = useRef(new Map<string, number>());
   const mutateRef = useRef<((action: Record<string, unknown>, resumed?: PendingListMutation) => Promise<ShoppingList[] | null>) | null>(null);
@@ -1330,20 +1348,27 @@ export default function Home() {
     settingsRevision.current += 1;
     setEpaperSettings(normalized);
     window.localStorage.setItem("supervie-epaper-settings", JSON.stringify(normalized));
-    // Keep the browser preview responsive while persisting the exact settings
-    // consumed by the e-paper aggregate endpoint.
-    void fetch("/api/epaper-settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        visibleTabs: normalized.visibleTabs.map(epaperKeyFor),
-        activeTab: epaperKeyFor(normalized.activeTab),
-        preferredTab: epaperKeyFor(normalized.activeTab),
-        carousel: { enabled: normalized.carouselEnabled, intervalSeconds: normalized.carouselIntervalSeconds },
-      }),
+    const before = epaperSettings;
+    const patch: Record<string, unknown> = {};
+    if (normalized.activeTab !== before.activeTab) Object.assign(patch, { activeTab: epaperKeyFor(normalized.activeTab), preferredTab: epaperKeyFor(normalized.activeTab) });
+    if (JSON.stringify(normalized.visibleTabs) !== JSON.stringify(before.visibleTabs)) patch.visibleTabs = normalized.visibleTabs.map(epaperKeyFor);
+    const carousel: Record<string, unknown> = {};
+    if (normalized.carouselEnabled !== before.carouselEnabled) carousel.enabled = normalized.carouselEnabled;
+    if (normalized.carouselIntervalSeconds !== before.carouselIntervalSeconds) carousel.intervalSeconds = normalized.carouselIntervalSeconds;
+    if (Object.keys(carousel).length) patch.carousel = carousel;
+    settingsPending.current += 1;
+    void settingsQueue.current.enqueue(async () => {
+      try {
+        const current = await fetch("/api/epaper-settings", { cache: "no-store", signal: AbortSignal.timeout(15_000) });
+        if (!current.ok) throw new Error("Lecture des réglages impossible");
+        const latest = await current.json() as { revision: number };
+        const response = await fetch("/api/epaper-settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...patch, revision: latest.revision }), signal: AbortSignal.timeout(15_000) });
+        if (!response.ok) throw new Error(response.status === 409 ? "Réglages modifiés ailleurs : réessayez" : "Réglages non enregistrés : réessayez");
+      } catch (error) { setMutationNotice(error instanceof Error ? error.message : "Réglages non enregistrés"); }
+      finally { settingsPending.current -= 1; }
     });
     setView(normalized.activeTab);
-  }, []);
+  }, [epaperSettings]);
 
   const setVisibleView = useCallback((tab: TabId) => {
     if (tab === "settings") {
@@ -1391,7 +1416,7 @@ export default function Home() {
         const response = await fetch("/api/epaper-settings", { cache: "no-store" });
         if (!response.ok) return;
         const next = localEpaperSettings(await response.json());
-        if (!active || !next || !isCurrentSettingsResponse(requestRevision, settingsRevision.current)) return;
+        if (!active || settingsPending.current > 0 || !next || !isCurrentSettingsResponse(requestRevision, settingsRevision.current)) return;
         setEpaperSettings(next);
         window.localStorage.setItem("supervie-epaper-settings", JSON.stringify(next));
       } catch {
@@ -1440,9 +1465,10 @@ export default function Home() {
     if (!supportsPendingMutationLocks()) {
       setSyncState("error"); setMutationNotice("Reprise multi-onglets indisponible : action non envoyée"); return null;
     }
-    const actionKey = JSON.stringify(action);
-    const mutationId = resumed?.id ?? retryMutationIds.current.get(actionKey) ?? crypto.randomUUID();
-    retryMutationIds.current.set(actionKey, mutationId);
+    // Identical payloads can represent distinct taps (for example, two
+    // intentionally identical additions). Only a persisted operation being
+    // resumed is allowed to reuse its idempotency key.
+    const mutationId = resumed?.id ?? crypto.randomUUID();
     if (!resumed) {
       const entry: PendingListMutation = { id: mutationId, action, createdAt: currentTimestamp(), status: "pending" };
       try { await updatePendingJournal((entries) => [...entries.filter((candidate) => candidate.id !== mutationId), entry]); }
@@ -1461,7 +1487,7 @@ export default function Home() {
         // idempotent action once. A different action always gets a new key.
         for (let attempt = 0; attempt < 2; attempt += 1) {
           try {
-            response = await fetch("/api/lists", { method: "POST", headers: { "Content-Type": "application/json", "x-supervie-mutation-id": mutationId }, body: JSON.stringify(persisted.action) });
+            response = await fetch("/api/lists", { method: "POST", headers: { "Content-Type": "application/json", "x-supervie-mutation-id": mutationId }, body: JSON.stringify(persisted.action), signal: AbortSignal.timeout(15_000) });
             if (response.status !== 409 || attempt === 1) break;
           } catch {
             if (attempt === 1) throw new Error("sync");
@@ -1478,7 +1504,7 @@ export default function Home() {
             const retryAfter = response.headers.get("retry-after"); const seconds = retryAfter ? Number(retryAfter) : NaN; const date = retryAfter ? Date.parse(retryAfter) : NaN;
             const delay = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : Number.isFinite(date) && date > Date.now() ? date - Date.now() : 5_000;
             const current = loadPendingListMutations(window.localStorage).find((entry) => entry.id === mutationId); const retryCount = (current?.retryCount ?? 0) + (resumed ? 1 : 0);
-            const retryEntry = current && { ...current, status: "rate_limited" as const, nextAttemptAt: Date.now() + Math.min(delay, 60_000), retryCount, error: retryCount >= 3 ? "Limitation persistante — réessayez plus tard" : "Limitation temporaire" };
+            const retryEntry = current && { ...current, status: "rate_limited" as const, nextAttemptAt: Date.now() + delay, retryCount, error: retryCount >= 3 ? "Limitation persistante — réessayez plus tard" : "Limitation temporaire" };
             await updatePendingJournal((entries) => entries.map((entry) => entry.id === mutationId && retryEntry ? retryEntry : entry)); setMutationNotice(retryCount >= 3 ? "Action en attente de votre confirmation" : "Action reportée temporairement");
             if (retryEntry) scheduleRetry(retryEntry);
             throw new Error("rate");
@@ -1493,7 +1519,6 @@ export default function Home() {
         }
         const data = await response.json() as { lists: ShoppingList[] };
         cancelScheduledRetry(mutationId);
-        retryMutationIds.current.delete(actionKey);
         try { await updatePendingJournal((entries) => entries.filter((entry) => entry.id !== mutationId)); } catch { setSyncState("error"); }
         setLists(data.lists); setSyncState("synced"); return data.lists;
       } catch (error) {
@@ -1631,6 +1656,7 @@ export default function Home() {
   return (
     <main className="stage">
       <section className="device" aria-label="Aperçu de l'écran SUPERVIE">
+        {mutationNotice.startsWith("Réglages") && <p role="alert" className="access-error">{mutationNotice}</p>}
         {view !== "settings" && <button className="site-settings-button" onClick={() => setView("settings")} aria-label="Réglages du site et de l'écran">⚙</button>}
         {view === "creche" ? <CrechePage settings={epaperSettings} onTab={setVisibleView} /> : view === "meteo" ? <MeteoPage settings={epaperSettings} onTab={setVisibleView} /> : view === "meals" ? <MealPlannerPage settings={epaperSettings} onTab={setVisibleView} /> : view === "metro" ? <MetroPage settings={epaperSettings} onTab={setVisibleView} /> : view === "agenda" ? <AgendaPage settings={epaperSettings} onTab={setVisibleView} /> : view === "settings" ? <SettingsPage settings={epaperSettings} onSettings={updateEpaperSettings} onTab={setVisibleView} /> : view === "iss" ? <IssPage settings={epaperSettings} onTab={setVisibleView} /> : view === "air" ? <AirPage settings={epaperSettings} onTab={setVisibleView} /> : view === "boats" ? <BoatsPage settings={epaperSettings} onTab={setVisibleView} /> : <>
         <header className="topbar">
@@ -1638,7 +1664,7 @@ export default function Home() {
             <p className="eyebrow">SUPERVIE · LISTE PARTAGÉE</p>
             <h1>{currentList?.name}</h1>
           </div>
-          <button className="list-switch" onClick={() => setShowLists(true)} aria-label="Afficher toutes les listes">
+          <button className="list-switch" onClick={(event) => { modalOpener.current = event.currentTarget; setShowLists(true); }} aria-label="Afficher toutes les listes">
             <span aria-hidden="true">☰</span>
             Toutes les listes
           </button>
@@ -1678,7 +1704,7 @@ export default function Home() {
 
         <footer className="controls">
           <div className="quick-actions">
-            <button className="primary-action" onClick={() => setShowAdd(true)}>+ Ajouter un article</button>
+            <button className="primary-action" onClick={(event) => { modalOpener.current = event.currentTarget; setShowAdd(true); }}>+ Ajouter un article</button>
             <button onClick={clearChecked}>Effacer cochés</button>
           </div>
           <p className={`sync-line ${syncState}`}><span /> {mutationNotice || (syncState === "loading" ? "Synchronisation…" : syncState === "error" ? "Hors connexion — réessayer" : "Synchronisé")}</p>
