@@ -481,6 +481,11 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .boats-corridor { min-height: 34px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #777; font-size: 8px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
 .boats-corridor i { font-style: normal; }
 .boats-corridor b { margin-left: auto; border: 1px solid #111; padding: 3px 5px; font-size: 7px; white-space: nowrap; }
+.boats-live-map { margin: 10px -5px 0; border: 2px solid #111; background: #111; }
+.boats-live-map header { min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 8px; background: #f8f7f1; border-bottom: 2px solid #111; }
+.boats-live-map header strong { font-size: 13px; line-height: 1; text-transform: uppercase; }
+.boats-live-map header span { border: 1px solid #111; padding: 3px 5px; font-size: 6px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.boats-live-map iframe { display: block; width: 100%; height: 205px; border: 0; background: #dedbd0; filter: grayscale(.75) contrast(1.08); }
 .next-boat { padding: 15px 0 12px; border-bottom: 2px solid #111; }
 .boat-title-line { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .next-boat h2 { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; font-size: 27px; line-height: 1; text-transform: uppercase; }
@@ -533,9 +538,9 @@ h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: .95; letter-spac
 .following-boats article small { font-size: 8px; }
 .following-boat-data { justify-items: end; text-align: right; }
 .following-boats > p { margin: 14px 0; font-size: 11px; font-weight: 700; }
-.boats-empty { min-height: 150px; display: flex; align-items: center; justify-content: center; gap: 18px; border-bottom: 2px solid #111; text-align: left; }
-.boats-empty span { font-size: 48px; filter: grayscale(1); }
-.boats-empty h2 { margin: 0 0 7px; font-size: 25px; line-height: 1.08; }
+.boats-empty { min-height: 74px; display: flex; align-items: center; justify-content: center; gap: 12px; border-bottom: 2px solid #111; text-align: left; }
+.boats-empty span { display: grid; width: 43px; height: 43px; place-items: center; border: 2px solid #111; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+.boats-empty h2 { margin: 0 0 4px; font-size: 18px; line-height: 1.08; }
 .boats-empty p { margin: 0; }
 .boats-empty p, .boats-updated { color: #555; font-size: 9px; font-weight: 800; }
 .boats-updated { margin: auto 0 4px; text-align: center; }

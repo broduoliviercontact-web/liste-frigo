@@ -969,6 +969,15 @@ function BoatsPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab:
   return <div className="boats-page">
     <header className="boats-header"><div><p className="eyebrow">CANAL DE L&apos;OURCQ</p><h1>Bateaux</h1></div><span aria-hidden="true">🚢</span></header>
     <div className="boats-corridor"><span>{route.from}</span><i>•</i><strong>{route.home}</strong><i>•</i><span>{route.to}</span><b>{route.lengthKm.toLocaleString("fr-FR")} km suivis</b></div>
+    <section className="boats-live-map" aria-label="Carte live MyShipTracking">
+      <header><div><p className="eyebrow">CARTE LIVE</p><strong>MyShipTracking</strong></div><span>Source externe</span></header>
+      <iframe
+        title="Carte live des bateaux sur le canal de l'Ourcq"
+        loading="lazy"
+        referrerPolicy="strict-origin-when-cross-origin"
+        src="https://embed.myshiptracking.com/embed?myst&zoom=14&lat=48.8946&lng=2.4175&show_menu=0&show_info=1&show_track=1&show_names=1&scroll_wheel=0&map_style=0"
+      />
+    </section>
     {next ?
       <section className="next-boat" aria-label="Prochain passage">
         <div className="boat-title-line"><div><p className="eyebrow">PROCHAIN PASSAGE</p><h2><span aria-hidden="true">🚢</span>{next.name}</h2></div><span className="boat-type">{next.vesselType ?? "Bateau AIS"}</span></div>
@@ -980,7 +989,7 @@ function BoatsPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab:
           <div><dt>Cap</dt><dd>{next.heading == null ? "—" : `${Math.round(next.heading)}°`}</dd></div>
         </dl>
       </section>
-      : <section className="boats-empty"><span aria-hidden="true">🚢</span><div><h2>Aucun bateau détecté</h2><p>{state.status === "degraded" ? "Flux AIS indisponible · secteur toujours affiché" : "Surveillance du canal active"}</p></div></section>}
+      : <section className="boats-empty"><span aria-hidden="true">AIS</span><div><h2>Aucune position structurée</h2><p>{state.status === "degraded" ? "AISStream ne couvre pas toujours ce tronçon · carte externe affichée" : "Notre API surveille le canal · carte externe en appui"}</p></div></section>}
     <section className="canal-route" aria-label={`Trajet surveillé de ${route.from} à ${route.to}`}>
       <header className="canal-chart-header"><div><p className="eyebrow">CARTE DU CANAL</p><strong>La Villette → Bondy</strong></div><div><span>VUE ÉLARGIE · ~8 KM</span><b>ZONE AIS · {route.lengthKm.toLocaleString("fr-FR")} KM</b></div></header>
       <div className="canal-chart-directions"><b>← PARIS</b><span>COURANT DU CANAL · EST / OUEST</span><b>BONDY →</b></div>

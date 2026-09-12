@@ -35,7 +35,7 @@ L’interface privilégie le contraste, les grandes zones tactiles et une mise e
 | **📅 Agenda** | Événements persistants : date, heure, catégorie et durée, avec une vue adaptée à l’e-paper. |
 | **🛰 ISS** | Position calculée de la Station spatiale internationale et trajectoires passée et future sur une carte du monde. |
 | **✈️ Air** | **Simulation** de trafic aérien pour le radar — ce n’est pas une source ADS-B réelle. |
-| **⛴ Bateaux** | Signaux AIS reçus sur le canal de l’Ourcq, avec distance, direction et estimation d’arrivée quand les données le permettent. |
+| **⛴ Bateaux** | Carte live MyShipTracking du canal et signaux AIS structurés quand la source serveur les reçoit, avec distance, direction et estimation d’arrivée quand les données le permettent. |
 
 Les **réglages** permettent de choisir les onglets visibles, la préférence de démarrage et le carrousel. Ils sont enregistrés côté serveur et partagés entre les navigateurs.
 
@@ -144,7 +144,7 @@ La garantie suppose un stockage navigateur fonctionnel et Web Locks. Si ces fonc
 | **Métro** | Un snapshot de plus de 20 minutes n’est pas une donnée courante. Les passages périmés sont filtrés ; l’e-paper ne transforme pas un délai négatif en faux départ « À quai ». |
 | **ISS** | CelesTrak est prioritaire ; [Where the ISS at](https://wheretheiss.at/w/developer) sert de secours. Les éléments orbitaux de plus de 48 h sont refusés. La position reste un calcul orbital, pas une mesure GPS en direct. |
 | **Météo** | Prévisions MET Norway et conditions Open-Meteo, avec repli et temporisation après limitation fournisseur. |
-| **Bateaux** | Seuls les signaux AIS reçus dans la zone sont visibles. « Aucun bateau » ne garantit pas l’absence de bateau sur le canal. |
+| **Bateaux** | La carte MyShipTracking peut montrer des bateaux même quand AISStream ne renvoie aucune position structurée pour l’e-paper. « Aucun bateau » dans notre API ne garantit pas l’absence de bateau sur le canal. |
 | **Snapshot e-paper** | Les sources sont agrégées avec des délais bornés : une panne externe ne doit pas rendre toutes les pages indisponibles. |
 
 Les caches mémoire et certaines temporisations sont propres à chaque Worker. Ils ne constituent pas une coordination mondiale des quotas fournisseurs. La collecte AIS n’est pas garantie permanente ; une telle évolution demanderait une architecture dédiée.
