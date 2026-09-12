@@ -1,3 +1,4 @@
+import { claimTransitRefresh, readTransitRefresh, finishTransitRefresh, type RefreshState } from "./refresh";
 import { requireSupervieAccess } from "../../access";
 import { fetchWithTimeout } from "../fetch-with-timeout";
 import { currentTransit, isFreshTransit } from "./state";
@@ -15,8 +16,9 @@ type TransitFavorite = {
 type Passage = { time: string; destination: string };
 
 const PRIM_URL = "https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring";
-const CACHE_MS = 10 * 60 * 1000;
-const FAILURE_CACHE_MS = 5 * 60 * 1000;
+// Eight requests per refresh: at most 768/day for this application.
+const CACHE_MS = 15 * 60 * 1000;
+const FAILURE_CACHE_MS = 15 * 60 * 1000;
 
 const favorites: TransitFavorite[] = [
   { id: "m5", label: "5", mode: "metro", lineRef: "C01375", stopRefs: ["22014", "463002"], stop: "Raymond Queneau" },
@@ -30,6 +32,21 @@ type TransitSnapshot = { updatedAt: string; lines: TransitResult[]; checkedAt: n
 let cached: { expiresAt: number; updatedAt: string; lines: TransitResult[] } | null = null;
 let lastSuccessful: { updatedAt: string; lines: TransitResult[] } | null = null;
 let schemaReady: Promise<void> | null = null;
+let loading: Promise<Awaited<ReturnType<typeof loadTransit>>> | null = null;
+let refreshState: RefreshState | null = null;
+
+class PrimFailure extends Error {
+  constructor(readonly status: number, readonly retryAt: number) { super(`PRIM HTTP ${status}`); }
+}
+function providerDeadline(value: string | null) {
+  const seconds = value && /^\d+$/.test(value.trim()) ? Number(value) : NaN;
+  const date = value ? Date.parse(value) : NaN;
+  const deadline = Number.isFinite(seconds) ? Date.now() + seconds * 1000 : date;
+  return Number.isFinite(deadline) ? Math.max(Date.now() + FAILURE_CACHE_MS, deadline) : Date.now() + FAILURE_CACHE_MS;
+}
+function present(snapshot: { updatedAt: string; lines: TransitResult[] }) {
+  return { ...currentTransit(snapshot), reason: refreshState?.reason, nextAttemptAt: refreshState?.nextAttemptAt };
+}
 
 async function ensureTransitSchema() {
   if (schemaReady) return schemaReady;
@@ -79,8 +96,8 @@ async function readStop(stopRef: string, favorite: TransitFavorite, apiKey: stri
   const response = await fetchWithTimeout(url, {
     headers: { Accept: "application/json", apikey: apiKey },
     cf: { cacheEverything: true, cacheTtl: 600 },
-  } as RequestInit);
-  if (!response.ok) throw new Error(`PRIM HTTP ${response.status}`);
+  } as RequestInit, 4_000);
+  if (!response.ok) throw new PrimFailure(response.status, providerDeadline(response.headers.get("retry-after")));
 
   const data = await response.json() as {
     Siri?: { ServiceDelivery?: { StopMonitoringDelivery?: Array<{ MonitoredStopVisit?: Array<Record<string, unknown>> }> } };
@@ -101,10 +118,16 @@ async function readStop(stopRef: string, favorite: TransitFavorite, apiKey: stri
   });
 }
 
-async function readLine(favorite: TransitFavorite, apiKey: string): Promise<TransitResult> {
+async function readLine(favorite: TransitFavorite, apiKey: string, failures: PrimFailure[]): Promise<TransitResult> {
   try {
-    const results = await Promise.all(favorite.stopRefs.map((stopRef) => readStop(stopRef, favorite, apiKey)));
-    const candidates = results.flat();
+    const results = await Promise.allSettled(favorite.stopRefs.map((stopRef) => readStop(stopRef, favorite, apiKey)));
+    const candidates = results.flatMap((result) => {
+      if (result.status === "fulfilled") return result.value;
+      const failure = result.reason instanceof PrimFailure ? result.reason : new PrimFailure(0, Date.now() + FAILURE_CACHE_MS);
+      failures.push(failure);
+      console.error(`Transit ${favorite.label} unavailable: ${failure.message}`);
+      return [];
+    });
     const passageCountsByDestination = new Map<string, number>();
     const passages = candidates.filter((passage) => Number.isFinite(Date.parse(passage.time)) && Date.parse(passage.time) >= Date.now() - 60_000)
       .sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
@@ -123,20 +146,38 @@ async function readLine(favorite: TransitFavorite, apiKey: string): Promise<Tran
   }
 }
 
-export async function readTransit() {
-  if (cached && cached.expiresAt > Date.now()) return currentTransit(cached);
+async function loadTransit() {
+  if (cached && cached.expiresAt > Date.now()) return present(cached);
   const snapshot = await readSnapshot();
+  refreshState = await readTransitRefresh();
   const freshSnapshot = snapshot && isFreshTransit(snapshot.updatedAt) ? snapshot : null;
   if (freshSnapshot && freshSnapshot.checkedAt + CACHE_MS > Date.now()) {
     cached = { expiresAt: freshSnapshot.checkedAt + CACHE_MS, updatedAt: freshSnapshot.updatedAt, lines: freshSnapshot.lines };
-    return currentTransit(freshSnapshot);
+    return present(freshSnapshot);
   }
   const { env } = await import("cloudflare:workers");
   const apiKey = typeof env.IDFM_PRIM_API_KEY === "string" ? env.IDFM_PRIM_API_KEY : "";
   if (!apiKey) return freshSnapshot
     ? currentTransit(freshSnapshot)
     : currentTransit({ updatedAt: snapshot?.updatedAt ?? "", lines: favorites.map((line) => ({ ...line, available: false, passages: [] })) });
-  const lines = await Promise.all(favorites.map((line) => readLine(line, apiKey)));
+  const reservation = await claimTransitRefresh(Date.now(), CACHE_MS);
+  if (reservation === null) {
+    refreshState = await readTransitRefresh();
+    // Another instance may have completed while this one was claiming the gate.
+    const latest = await readSnapshot();
+    return present(latest ?? { updatedAt: "", lines: favorites.map(line => ({ ...line, available: false, passages: [] })) });
+  }
+  const failures: PrimFailure[] = [];
+  // Four requests per group, separated by more than one second (PRIM: 5/s).
+  const first = await Promise.all(favorites.slice(0, 2).map(line => readLine(line, apiKey, failures)));
+  await new Promise(resolve => setTimeout(resolve, 1_100));
+  const second = await Promise.all(favorites.slice(2).map(line => readLine(line, apiKey, failures)));
+  const lines = [...first, ...second];
+  const limited = failures.filter(failure => failure.status === 429);
+  refreshState = {
+    reason: limited.length ? "rate_limited" : failures.length ? "source_error" : lines.some(line => line.available) ? "ready" : "no_departures",
+    nextAttemptAt: limited.length ? Math.max(...limited.map(failure => failure.retryAt)) : Date.now() + (failures.length ? FAILURE_CACHE_MS : CACHE_MS),
+  };
   const updatedAt = new Date().toISOString();
   if (lines.some((line) => line.available)) {
     lastSuccessful = { updatedAt, lines };
@@ -148,9 +189,16 @@ export async function readTransit() {
   } else if (lastSuccessful && isFreshTransit(lastSuccessful.updatedAt)) {
     cached = { expiresAt: Date.now() + FAILURE_CACHE_MS, ...lastSuccessful };
   } else {
-    cached = { expiresAt: Date.now() + FAILURE_CACHE_MS, updatedAt, lines };
+    cached = { expiresAt: Date.now() + FAILURE_CACHE_MS, updatedAt: snapshot?.updatedAt ?? "", lines };
   }
-  return currentTransit(cached);
+  cached.expiresAt = refreshState.nextAttemptAt;
+  await finishTransitRefresh(reservation, refreshState);
+  return present(cached);
+}
+
+export async function readTransit() {
+  if (!loading) loading = loadTransit().finally(() => { loading = null; });
+  return loading;
 }
 
 export async function GET(request: Request) {

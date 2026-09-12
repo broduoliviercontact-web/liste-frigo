@@ -1,3 +1,4 @@
+import { DatabaseSync } from 'node:sqlite';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -30,14 +31,20 @@ function line(times) {
   return { id: 'm5', label: '5', mode: 'metro', stop: 'Raymond Queneau', available: true,
     passages: times.map(time => ({ time: typeof time === 'number' ? iso(time) : time, destination: 'Bobigny' })) };
 }
-function harness({ updatedAt = iso(NOW), checkedAt = NOW, times = [NOW + 180000], key = '', fails = false, live = false } = {}) {
+function harness({ updatedAt = iso(NOW), checkedAt = NOW, times = [NOW + 180000], key = '', fails = false, live = false, limited = false, partial = false } = {}) {
   const clock = { now: NOW };
   let providerFails = fails;
   const policy = load('../app/api/transit/state.ts', {}, clock);
   let row = { updated_at: updatedAt, checked_at: checkedAt, payload: JSON.stringify([line(times)]) };
   let requests = 0;
   let saves = 0;
+  const sqlDb = new DatabaseSync(':memory:');
+  sqlDb.exec('CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INTEGER NOT NULL)');
   const env = { IDFM_PRIM_API_KEY: key, DB: { prepare(sql) {
+    if(sql.includes('app_settings')) {
+      let values = []; const statement = sqlDb.prepare(sql);
+      return { bind(...args) { values=args; return this; }, async first() { return statement.get(...values) ?? null; }, async run() { return statement.run(...values); } };
+    }
     let args;
     return {
       bind(...values) { args = values; return this; },
@@ -50,19 +57,21 @@ function harness({ updatedAt = iso(NOW), checkedAt = NOW, times = [NOW + 180000]
       },
     };
   } } };
-  const route = load('../app/api/transit/route.ts', {
+  const gate = load('../app/api/transit/refresh.ts', { 'cloudflare:workers': {env} }, clock);
+  const newRoute = () => load('../app/api/transit/route.ts', {
     '../../access': { requireSupervieAccess: async () => null },
     '../fetch-with-timeout': { fetchWithTimeout: async (input) => {
       const url = new URL(input);
       assert.deepEqual([...url.searchParams.keys()].sort(), ["LineRef", "MonitoringRef"]);
       requests++;
+      if(limited || (partial && url.searchParams.get('MonitoringRef').includes('22014'))) return new Response('', {status:429, headers:{'retry-after':'1800'}});
       if (providerFails) throw new Error('PRIM unavailable');
       return Response.json({ Siri: { ServiceDelivery: { StopMonitoringDelivery: [{ MonitoredStopVisit: live ? [{ MonitoredVehicleJourney: { DestinationName: [{ value: "Bobigny" }], MonitoredCall: { ExpectedDepartureTime: iso(NOW + 60 * 60000) } } }] : [] }] } } });
     } },
-    './state': policy,
+    './state': policy, './refresh': gate,
     'cloudflare:workers': { env },
   }, clock);
-  return { route, policy, clock, failProvider: () => { providerFails = true; }, requests: () => requests, saves: () => saves, clearSnapshot: () => { row = null; } };
+  return { route: newRoute(), newRoute, gate, policy, clock, failProvider: () => { providerFails = true; }, requests: () => requests, saves: () => saves, clearSnapshot: () => { row = null; } };
 }
 const request = () => new Request('https://local/api/transit');
 
@@ -170,4 +179,36 @@ test('last successful in-memory fallback also expires after 20 minutes', async (
   h.clock.now = NOW + 25 * 60000;
   assert.equal((await h.route.readTransit()).status, 'unavailable');
   assert.equal(h.saves(), 1);
+});
+
+
+test('shared SQLite gate: cold Workers and concurrent calls obey 429 deadline without aging snapshot forward', async () => {
+ const h=harness({updatedAt:iso(NOW-3600000),checkedAt:0,key:'fake',limited:true});
+ const results=await Promise.all([h.route.readTransit(),h.newRoute().readTransit(),h.newRoute().readTransit()]);
+ assert.equal(h.requests(),8); assert.equal(h.saves(),0);
+ assert.ok(results.every(r=>r.status==='unavailable'));
+ const after=await h.newRoute().readTransit();
+ assert.equal(after.reason,'rate_limited'); assert.equal(after.nextAttemptAt,NOW+1800000);
+ assert.equal(after.updatedAt,iso(NOW-3600000));
+ h.clock.now=NOW+1799999;
+ assert.equal((await h.newRoute().readTransit()).status,'unavailable'); assert.equal(h.requests(),8);
+ h.clock.now++;
+ await h.newRoute().readTransit(); assert.equal(h.requests(),16);
+});
+
+test('one failed stop does not discard valid departures at the other stop', async () => {
+ const h=harness({updatedAt:iso(NOW-3600000),checkedAt:0,key:'fake',live:true,partial:true});
+ const result=await h.route.readTransit();
+ assert.equal(result.status,'ready'); assert.equal(result.lines[0].available,true);
+ assert.equal(result.reason,'rate_limited'); assert.equal(result.nextAttemptAt,NOW+1800000);
+});
+
+test('shared reservation survives an interrupted Worker and rejects an obsolete completion', async () => {
+ const h=harness();
+ const reservation=await h.gate.claimTransitRefresh(NOW,600000);
+ assert.equal(await h.gate.claimTransitRefresh(NOW,600000),null);
+ h.clock.now=NOW+600001;
+ const second=await h.gate.claimTransitRefresh(h.clock.now,600000);
+ await h.gate.finishTransitRefresh(reservation,{reason:'ready',nextAttemptAt:0});
+ assert.equal((await h.gate.readTransitRefresh()).nextAttemptAt,second);
 });

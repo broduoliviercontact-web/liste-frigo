@@ -245,7 +245,7 @@ function useEpaperWeather() {
 }
 
 function useTransit() {
-  const [transit, setTransit] = useState<{ updatedAt: string; lines: TransitLine[] } | null>(null);
+  const [transit, setTransit] = useState<{ updatedAt: string; lines: TransitLine[]; reason?: string; nextAttemptAt?: number } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -834,7 +834,7 @@ function MetroPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab:
 
   return <div className="metro-page">
     <header className="metro-header"><div><p className="eyebrow">DÉPLACEMENTS SUPERVIE</p><h1>Raymond Queneau</h1><span>Station métro · Bus</span></div><span className="metro-symbol" aria-hidden="true">M</span></header>
-    <section className="metro-departures" aria-label="Prochains passages"><header><p className="eyebrow">DÉPARTS À VENIR</p><strong>{activeLines.length ? `${activeLines.length} lignes en direct` : "Mise à jour en cours"}</strong></header>
+    <section className="metro-departures" aria-label="Prochains passages"><header><p className="eyebrow">DÉPARTS À VENIR</p><strong>{activeLines.length ? `${activeLines.length} lignes disponibles` : transit ? "Temps réel indisponible" : "Chargement"}</strong></header>
       <ul>{activeLines.map((line) => {
         const directions = directionsFor(line);
         return <li key={line.id} className="metro-line"><b className={line.mode === "metro" ? "metro-badge" : ""}>{line.label}</b><div className="metro-directions">
@@ -846,7 +846,8 @@ function MetroPage({ settings, onTab }: { settings: EpaperSettings; onTab: (tab:
       })}</ul>
       {unavailableLines.length > 0 && <p className="metro-unavailable">Temps réel indisponible : {unavailableLines.map((line) => line.label).join(" · ")}</p>}
     </section>
-    <p className="metro-note"><span /> {transit?.updatedAt ? `Mis à jour à ${new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(new Date(transit.updatedAt))}` : "Chargement des passages"}</p>
+    {transit?.reason === "rate_limited" && <p className="metro-unavailable" role="status">Le fournisseur limite les requêtes. Nouvelle tentative automatique{transit.nextAttemptAt ? ` à ${new Date(transit.nextAttemptAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : " plus tard"}.</p>}
+    <p className="metro-note"><span /> {transit?.updatedAt ? `Dernières données : ${new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(transit.updatedAt))}` : transit ? "Aucun passage récent disponible" : "Chargement des passages"}</p>
     <AppNav active="metro" settings={settings} onChange={onTab} />
   </div>;
 }
