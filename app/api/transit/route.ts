@@ -16,8 +16,9 @@ type TransitFavorite = {
 type Passage = { time: string; destination: string };
 
 const PRIM_URL = "https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring";
-// Eight requests per refresh: at most 768/day for this application.
-const CACHE_MS = 15 * 60 * 1000;
+// Owner confirmed a 1,000,000/day quota on 2026-09-12.
+// Eight requests/minute = at most 11,520/day; batches still respect 5/s.
+const CACHE_MS = 60 * 1000;
 const FAILURE_CACHE_MS = 15 * 60 * 1000;
 
 const favorites: TransitFavorite[] = [
@@ -95,7 +96,7 @@ async function readStop(stopRef: string, favorite: TransitFavorite, apiKey: stri
   // locally in readLine rather than sending the unsupported SIRI parameter.
   const response = await fetchWithTimeout(url, {
     headers: { Accept: "application/json", apikey: apiKey },
-    cf: { cacheEverything: true, cacheTtl: 600 },
+    cf: { cacheEverything: true, cacheTtl: 60 },
   } as RequestInit, 4_000);
   if (!response.ok) throw new PrimFailure(response.status, providerDeadline(response.headers.get("retry-after")));
 

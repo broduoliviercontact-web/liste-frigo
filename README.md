@@ -284,11 +284,13 @@ La collecte PRIM est réservée atomiquement dans D1, via la clé technique
 `transit_provider_refresh` de `app_settings`. Les nouvelles instances Worker
 partagent cette réservation et la date de reprise après une erreur ; une panne
 ne rajeunit pas le dernier snapshot réussi. Huit requêtes au maximum sont
-échelonnées par collecte, espacée d’au moins 15 minutes (au plus 768 appels
+échelonnées par collecte, espacée d’au moins une minute (au plus 11 520 appels
 par 24 h pour cette application, hors autres utilisateurs de la même clé).
 Un `Retry-After` plus long est respecté. Les passages expirés restent masqués
-pendant l’attente : cette cadence ne garantit pas un affichage continu des
-prochains métros. Une fréquence plus élevée nécessite un quota adapté.
+pendant l’attente. Le propriétaire a confirmé un quota de 1 000 000 de requêtes
+par jour le 12 septembre 2026. Pour une autre instance, adapter la cadence au
+quota réel avant publication. La migration 0009 libère une seule fois la
+temporisation de l’ancien quota épuisé ; les nouveaux Retry-After restent respectés.
 
 PRIM documente notamment des plafonds de 5 requêtes/seconde et 1 000/jour pour
 certains comptes : vérifier le quota réel dans « Ma consommation API ».
